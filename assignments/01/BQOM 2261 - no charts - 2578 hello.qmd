@@ -1,0 +1,81 @@
+---
+title: "BQOM 2578 Hello Quarto"
+format: docx
+editor: visual
+---
+
+```{r}
+#| label: load-packages
+#| include: false
+
+# install these the first time:
+#install.packages("tidyverse")
+#install.packages("palmerpenguins")
+
+library(tidyverse)
+library(palmerpenguins)
+
+# check that your working directory is the same as where you downloaded our qmd file, and if not, then fix it as shown below
+
+getwd()
+# copy your actual directory here in the comments:
+# C:\Users\epalj\OneDrive\Teaching\Data mining\Intro to Quarto
+#
+# now change the '\' to '/'
+# C:/Users/epalj/OneDrive/Teaching/Data mining/Intro to Quarto
+#
+# then set the wd as follows:
+# setwd("C:/Users/epalj/OneDrive/Teaching/Data mining/Intro to Quarto")
+```
+
+## Meet Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Meet the penguins
+
+![](https://raw.githubusercontent.com/quarto-dev/quarto-web/main/docs/get-started/hello/rstudio/lter_penguins.png){style="float:right;" fig-alt="Illustration of three species of Palmer Archipelago penguins: Chinstrap, Gentoo, and Adelie. Artwork by @allison_horst." width="401"}
+
+The `penguins` data from the [**palmerpenguins**](https://allisonhorst.github.io/palmerpenguins "palmerpenguins R package") package contains size measurements for `r nrow(penguins)` penguins from three species observed on three islands in the Palmer Archipelago, Antarctica.
+
+The plot below shows the relationship between flipper and bill lengths of these penguins.
+
+```{r}
+#| label: plot-penguins
+#| warning: false
+#| echo: true
+
+
+head(penguins)
+
+ggplot(penguins, 
+       aes(x = flipper_length_mm, y = bill_length_mm)) +
+  geom_point(aes(color = species, shape = species)) +
+  scale_color_manual(values = c("darkorange","purple","cyan4")) +
+  labs(
+    title = "Flipper and bill length",
+    subtitle = "Dimensions for penguins at Palmer Station LTER",
+    x = "Flipper length (mm)", y = "Bill length (mm)",
+    color = "Penguin species", shape = "Penguin species"
+  ) +
+  theme_minimal()
+```
+
+Here is another example of ggplot - this data is about the MPG (city and highway) for cars with different numbers of cylinders:
+
+```{r}
+#| label: load-more-packages
+#| echo: true
+
+# This dataset contains a subset of the fuel economy data from the EPA.
+# Specifically, we use the `mpg` dataset from the **ggplot2** package.
+
+library(ggplot2)
+
+head(mpg)
+
+ggplot(mpg, aes(x = hwy, y = cty, color = cyl)) +
+  geom_point(alpha = 0.5, size = 2) +
+  scale_color_viridis_c() +
+  theme_minimal()
+```
