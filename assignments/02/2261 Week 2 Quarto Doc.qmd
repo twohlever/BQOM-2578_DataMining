@@ -1,0 +1,391 @@
+---
+title: "Lecture 2"
+format: docx
+editor: visual
+---
+
+## Agenda
+
+Walk through Data Preparation using the "Welcome to the Team!" Minicase.
+
+## Loading packages
+
+Always start by loading the packages you will use. A good practice is to load all packages in your first code chunk.
+
+Note that unlike R scripts, when you run a code chunk R runs all lines on it.
+
+```{r}
+#You only need to install ONCE, comment the next line afterwards. 
+#install.packages("tidyverse") 
+#You need to call the library every time you want to use it 
+library(tidyverse)
+```
+
+# Data Prep with Welcome to the Team
+
+## Importing data
+
+We will use read.csv to read the csv files into R. Make sure that the notebook file is saved in the **same folder** as your csv files. Two ways to make sure of it:
+
+```{r}
+#A: 
+# You can go to Session -> Set Working Directory -> Set Directory (choose the same folder as csv files) or to Source File Location if it is saved on the same folder as your csv file. 
+
+#B: 
+#Use getwd to get your current working directory and setwd to set a new one. You have to copy the file path to the folder where you have your csv file. Note it asks for '/' and not for '\'. 
+getwd() 
+#setwd("C:/Users/XXXXXX/OneDrive - University of Pittsburgh/XXXXXXX")
+```
+
+Let's clean up the environment:
+
+```{r}
+# use the rm() function or the "broom" icon button under the Environment tab
+#
+#rm( list <- ls() )
+
+```
+
+After making sure everything is in the same folder, we can load the datasets that we will use through read.csv:
+
+```{r}
+#read.csv will read the csv into a dataframe, which we can manipulate in R. 
+sales <- read.csv("sales.csv") 
+features <- read.csv("features.csv") 
+stores <- read.csv("stores.csv")
+```
+
+## a. Discovery
+
+```{r}
+#head displays the first rows 
+head(sales) 
+
+#tail displays the last rows 
+tail(sales) 
+
+#dim tells you how many rows by how many columns you have
+dim(sales) 
+
+#names returns the names of the columns that you have 
+names(sales) 
+
+#summary will give you relevant summary statistics for each variable depending on its type  
+summary(sales)
+```
+
+-   What is our level of analysis observation?
+
+-   What are our most important variables? Are they of the right type?
+
+-   What can we say about them?
+
+**Do the same for features and stores.**
+
+## B. Structuring
+
+Now, the Team's analysis should be at the Store level, not at the department level. Therefore, we can aggregate to the department level sales. That is, by adding the sales fo all departments in a store, we get sales at the store.
+
+We will use piping %\>% to do this. The code below groups the sales data by the store and date, and then returns for each grouping two items: the sum of the weekly sales and the mean of IsHoliday so that is info is not lost.
+
+```{r}
+sales2<-sales %>% group_by(Store,Date) %>% summarize(Weekly_Sales=sum(Weekly_Sales),IsHoliday=mean(IsHoliday)) 
+head(sales2) 
+dim(sales2)   # compare this to the other datasets...  features?
+summary(sales2)   
+
+```
+
+```{r}
+#To understand what we did, lets look at Sales for Store 1 on a specific date using our first dataset 
+head(sales%>%filter(Store==1 & Date=='2010-02-12')) 
+tail(sales%>%filter(Store==1 & Date=='2010-02-12')) 
+#and our second dataset. 
+sales2%>%filter(Store==1 & Date=='2010-02-12')  
+
+#What is the difference?
+```
+
+## C. Cleaning: Data Types and Missing Values
+
+### Changing data type
+
+Dates can be problematic. Notice that right now R did not recognize Date as a date, but just as text. We should tell R it is a date. To do that, we'll benefit from another package: **lubridate**. https://lubridate.tidyverse.org/
+
+```{r}
+#install.packages("lubridate")  
+head(sales2$Date) 
+library(lubridate)  
+sales2$Date<-ymd(sales2$Date)  
+#ymd is telling R the date format is year, month and day.   
+#Be mindful: the order of month and day can vary in different regions and Excel tends to recognize dates and rearrange according to its region.   
+#Make sure to check where are months and days placed when working with dates.   
+#ydm would be the function for a date like 2010-26-02    
+
+#We can also change IsHoliday type just to show you how type can be changed (it isn't really neccesary) 
+#The str() function displays the internal structure of an object such as an array, list, matrix, factor, ...
+str(sales$IsHoliday)
+
+sales$IsHoliday<-as.factor(sales$IsHoliday)  
+str(sales$IsHoliday)
+# if you need it to be a logical variable, then use "as.logical(sales$IsHoliday)"
+
+summary(sales2) # what has changed?  
+```
+
+Now you can do the same for the Date variable in features and stores (insert a code block here).
+
+**Features and Stores**
+
+```{r}
+head(features)
+tail(features)
+dim(features)
+names(features)
+summary(features)
+
+```
+
+Features has a different problem; several missing values.
+
+How relevant are they and how will we handle them?
+
+```{r}
+#If summary has too many variables you can select specific variables using select(var1:var5) OR de-selecting specific variables select(-c(var1:var5)) for a specific dataset. 
+#c() indicates a group of variables, we are applying the - to all the group 
+#arguments are select(data,vars)
+
+
+summary(select(features,MarkDown1:MarkDown5))
+
+summary(select(features,-c(MarkDown1:MarkDown5)))
+
+
+
+# %>% creates a pipe. It applies a command to what was there before. Can read it as 'then pass it to'
+#It makes your code easier to read
+
+#features%>%select(MarkDown1:MarkDown5)%>%summary()
+#features%>%select(-c(MarkDown1:MarkDown5))%>%summary()
+
+```
+
+### **Handling Missing Values**
+
+Note how CPI and Unemployment have a few NA values, but Markdown on the other hand has a lot.
+
+```{r}
+# We'll drop all Markdown values with select( - ...) 
+# and replace NA values with the mean of Unemployment and CPI.
+features2<-features%>%select(-c(MarkDown1:MarkDown5))%>% 
+  mutate(Unemployment = replace_na(Unemployment,mean(Unemployment, na.rm = TRUE)),
+         CPI = replace_na(CPI,mean(CPI, na.rm = TRUE)))
+
+summary(features2)
+```
+
+We have 5 variables: Store, Department, Date, Weekly Sales and IsHoliday. Notice they have different data types. Integers are numbers, Characters are text, dbl are numbers with decimal points and lgl stands for logical; can be False or True.
+
+## D. Enriching
+
+To enrich our sales dataset, we can merge it with the other two; features and stores.
+
+Features provide additional information on the date and location for each store.
+
+Stores provide additional information (Type and Size) about the Store.
+
+Now let's merge all three datasets:
+
+```{r}
+head(stores)
+head(features2)
+#merging as a command is easy, you just select the datasets to merge and by which variables
+#what requires some thought is identifying the key variables you want to merge the dataset by.
+#Those should be common values between both datasets that make for unique combinations
+storeandfeatures<-merge(stores,features2,by="Store")
+head(storeandfeatures)
+head(sales2)
+df0<-merge(sales2,storeandfeatures,by=c("Date","Store"))
+
+summary(df0)
+
+```
+
+```{r}
+#Note how IsHoliday is duplicate, because it appeared in both datasets and was not identified as a key variable. To correct, we can remove one and rename the other. 
+
+#there are two options - un-comment one only:
+#df<-df0%>%select(-(IsHoliday.y))%>%rename(IsHoliday=IsHoliday.x)  # keep as an number
+df<-df0%>%select(-(IsHoliday.x))%>%rename(IsHoliday=IsHoliday.y)  #keep as a logical
+
+summary(df)
+
+```
+
+Let's look at our new nice dataset, both for store10 and for the other stores:
+
+```{r}
+# Use == which is a logical operator, it will only return values for when Store is equal to 10
+print("Store 10 Weekly Sales Summary Statistics")
+df%>%filter(Store==10)%>%summary()
+
+print("") # vertical spacing :-)
+cat("\n") # vertical spacing, 2nd approach :-)
+writeLines("\n")  # vertical spacing, third approach :-)
+
+print("All other stores Weekly Sales Summary Statistics")
+# now use != which is a different logical operator, it will return all results for Store when Store is NOT equal to 10
+df%>%filter(Store!=10)%>%summary()
+
+```
+
+We can also create a dataset with the three merged datasets, to avoid having to load and merge and clean again next time:
+
+## F. Publishing
+
+```{r}
+summary(df)
+df%>%write.csv("Supermarketdata.csv",row.names = FALSE)
+
+```
+
+## **E. Verifying / Exploring**
+
+### First Graph
+
+```{r}
+# recall the store types of A, B, and C and we can find the mean Size by Type
+table(df$Type)
+
+a0<-df%>%group_by(Type)%>%summarize(SIZE=mean(Size))
+a0
+
+# This same coding is helpful for doing graphs:
+
+ggplot(a0) +
+  aes(x = Type, y = SIZE, fill = Type) +
+  geom_bar(stat = "identity") +
+  ggtitle("Average size by Store Type") +
+  xlab("Store Type") +
+  ylab("Size (sq. feet)") +
+  theme_minimal() +
+  geom_text(aes(label = SIZE), position = position_stack(vjust = 0.5),
+            fontface = "bold") +
+  scale_color_brewer(palette = 'Set1')
+
+```
+
+```{r}
+#Same graph but nicer. look for online sources (e.g., chatGPT ) for graphing format code  
+
+ggplot(df%>%group_by(Type)%>%summarize(SIZE=round(mean(Size),2),Obs=n(),SE_SIZE=sd(Size)/sqrt(Obs))) +
+  aes(x = Type, y = SIZE, fill = Type) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = SIZE - SE_SIZE, ymax = SIZE + SE_SIZE),
+                width = 0.2, position = position_dodge(0.9)) +
+  scale_fill_manual(values = c("steelblue", "lightblue", "white"))+
+  ggtitle("Average size by Store Type") +
+  xlab("Store Type") +
+  ylab("Size (sq. feet)") +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        axis.line = element_line(color = "black"),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14)) +
+  geom_text(aes(label = SIZE), position = position_stack(vjust = 0.5),
+            fontface = "bold") +
+  scale_color_brewer(palette = 'Set1')
+
+```
+
+### Feature Engineering:
+
+```{r}
+#Feature Engineering sounds complex but just consists of creating new variables that could be useful for analysis. Below two examples:
+df$Store10<-ifelse(df$Store==10,1,0)
+df$Sales_by_sqfeet<-df$Weekly_Sales/df$Size
+
+```
+
+**Relationship between variables:**
+
+### **Correlation Matrix:**
+
+cor() only uses numeric variables, so the pipe has a step to include only numeric data
+
+```{r}
+df%>%select_if(is.numeric)%>%cor()
+
+```
+
+### **Boxplot:**
+
+A boxplot to get a sense of the distribution in weekly sales:
+
+```{r}
+ggplot(df)+geom_boxplot(mapping =aes(group=Type, x=Type, y=Weekly_Sales))
+
+```
+
+### **A line graph for sales by date:**
+
+```{r}
+#First, we have to group sales by store. Let's compare Store 10 vs all the other stores.
+
+
+a0<- df%>%group_by(Store10,Date)%>%summarize(Weekly_Sales=mean(Weekly_Sales))
+a0
+a0%>%filter(Date=='2010-02-05')
+
+
+
+ggplot(a0)+ aes(x = Date, y = Weekly_Sales, color= as.factor(Store10)) +
+ geom_point() +  # Add data points with transparency
+ geom_smooth(method = 'lm') +  # Increase line width and add transparency to trendline
+  labs(x = "Date", y = "Weekly Sales") +
+  ggtitle("Weekly Sales by Date: Store 10 vs the rest")
+
+```
+
+**And a nicer line-graph:**
+
+```{r}
+
+a0<-df%>%filter(Type=='B')%>%group_by(Store10,Date)%>%summarize(Weekly_Sales=mean(Weekly_Sales))
+a0
+a0%>%filter(Date=='2010-02-05')
+ggplot(a0)+ aes(x = Date, y = Weekly_Sales, color= as.factor(Store10)) +
+  geom_point() +  # Add data points with transparency
+  geom_smooth(method = 'lm', size = 1.2, alpha = 0.5,se=TRUE) +  # Increase line width and add transparency to trendline
+  labs(x = "Date", y = "Weekly Sales") +
+  ggtitle("Weekly Sales by Date: Store 10 vs other Type B stores") +
+  scale_color_manual(values = c("darkgreen", "lightblue", "steelblue")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        axis.line = element_line(color = "black"),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14))+
+  scale_y_continuous(labels = scales::comma)  # Format y-axis labels with commas
+
+```
+
+What impressions do you get from Store 10 performance compared with the other Stores from these graphs?
+
+What would be your 'killer figure' for your team's presentation?
+
+Which variables would you consider the most important when assessing Store 10 performance?
+
+After all the data wrangling, do you think modeling will be easier and more effective or not? Why?
+
+```{r}
+# maybe explicitly make Type a categorical variable with the as.factor() function
+#
+df2 <- df
+head(df2)
+df2$Type = as.factor( df2$Type)
+head(df2)
+str(df2$Type)
+
+```
