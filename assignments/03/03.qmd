@@ -1,0 +1,285 @@
+---
+title: "Class 03 Linear Regression with Supermarket Data"
+subtitle: "BQOM 2578 | Data Mining"
+date: "September 18, 2025" 
+author: "Theresa Wohlever"
+editor: source
+format:
+  pdf:
+    toc: true
+    toc-depth: 2
+    number-sections: false
+    mainfont: "Georgia"
+    sansfont: "Avenir"
+    monofont: "Menlo"
+    mathfont: "STIX Two Math"
+    pdf-engine: xelatex
+---
+
+# Executive Summary
+
+## Loading packages
+
+```{r}
+#| label: LoadPackages
+#| echo: false
+#| message: false
+#| results: 'hide'
+
+rm(list = ls())
+
+# You only need to install ONCE, comment the next line afterwards.
+# install.packages("tidyverse")
+# install.packages("lm.beta")
+
+
+library(tidyverse)
+library("lm.beta")
+
+setwd("/Users/theresawohlever/git_repos/BQOM-2578_DataMining/BQOM-2578_DataMining_twohlever/assignments/03")
+
+```
+
+## Importing data
+
+```{r}
+#| label: ImportData
+#| echo: false
+#| message: false
+#| results: 'hide'
+
+
+#read.csv will read the csv into a dataframe, which we can manipulate in R.
+df<-read.csv("Supermarketdata.csv")
+
+#
+# let's add / wrangle these other variables to our dataset
+df$Store10<-ifelse(df$Store==10,1,0)  # to isolate Store 10
+df$Type<-as.factor(df$Type)           # convert A B C to a factor
+df$Sales_by_sqfeet<-df$Weekly_Sales/df$Size  # Sales per Sq Ft
+df$Date<-ymd(df$Date)                 # properly interrupt date field
+
+#
+# Check out the results
+head(df)
+
+```
+
+
+Correlation Matrix in R
+
+```{r}
+#| label: CorrelationMatrix
+#| echo: true
+#| message: true
+
+
+cormat<-df%>%select_if(is.numeric)%>%cor()  # recall that cor() needs numeric data
+# install.packages("corrplot")
+library(corrplot)
+
+# corrplot(cormat)
+# corrplot(cormat, type="upper",diag=FALSE, tl.cex=1.2)
+corrplot(cormat, method="number", type="upper",diag=FALSE, tl.cex=1.2)
+
+```
+
+With a cleaned dataset, we can jump straight ahead into running regressions:
+
+Is there a significant difference for Store10 when compared with other stores?
+
+```{r}
+#| label: Store10
+#| echo: true
+#| message: true
+
+m1<-lm(Weekly_Sales~Store10,data=df)
+summary(m1)
+
+```
+
+What is our level of analysis observation? What are our most important variables? Are any of them of the right type? What can we say about them?
+
+```{r}
+#| label: Store10+Date
+#| echo: true
+#| message: true
+
+m2<-lm(Weekly_Sales~Store10+Date,data=df)
+summary(lm(Weekly_Sales~Store10+Date,data=df))
+
+```
+
+Let's explore the dataset variable Size:
+
+```{r}
+#| label: Store10+Date+Size
+#| echo: true
+#| message: true
+
+m3<-lm(Weekly_Sales~Store10+Date+Size,data=df)
+summary(m3)
+m3A<-lm(Weekly_Sales~Store10+Size,data=df)
+summary(m3A)
+
+```
+
+We could just look at all the variables, but now the standardized coefficients would be really helpful:
+
+```{r}
+#| label: AllVariables
+#| echo: true
+#| message: true
+
+mAll <- lm(Weekly_Sales ~ ., data=df)
+summary(mAll)
+
+
+```
+
+Comparing different models and creating an output table:
+
+```{r}
+#| label: CompareModels
+#| echo: true
+#| message: true
+
+library(jtools)
+library(sjPlot)
+
+# Generate the table using tab_model()
+
+model_table <- tab_model(m1, m2, m3,mAll,dv.labels = c("(1) Store 10", "(2) Store 10 + Date","(3) Store 10 + Date + Store Size","(4) Store 10 + all variables"),show.ci=FALSE,collapse.se=TRUE, p.threshold = c(0.1, 0.05, 0.01,0.001),p.style = "stars", string.se = "std. Error", string.p = "p-value",transform=NULL)
+# Print the table
+print(model_table)
+```
+
+### Standardize Coefficients
+
+Recall that Standardized Coefficients are helpful in identifying key variables in the Linear Regression.
+
+```{r}
+#| label: StandardCoef
+#| echo: true
+#| message: true
+
+# STANDARDIZED COEFFICIENTS can be an important output of a linear regression 
+#     analysis yet they are not in the lm() function.  
+# lm.beta() can be called to calculate the standardized coefficients and add
+#     that information into the model:  m1b <- lm.beta(m1) 
+#     where m1 is the output of the lm(), that is m1 <- lm()
+#
+# After being saved, you can see the results using summary(m1b)
+# Alternatively, you can run summary(lm.beta(lm(y~x,df)))
+#
+# Recall that we already installed and called the library "lm.beta"
+#install.packages("lm.beta")
+library("lm.beta")
+#
+# Let's include the standard coeff in our analysis:
+summary(lm.beta(m1))
+summary(lm.beta(m2))
+summary(lm.beta(m3))
+summary(lm.beta(mAll))
+
+```
+
+Also, the tab_model() has an option to display standardized coefficients
+
+```{r}
+#| label: printModel
+#| echo: true
+#| message: true
+
+# Use show.std="std" in tab_model() to have it display the std coeff
+
+
+model_table_stdbeta <- tab_model(m1, m2, m3,mAll,dv.labels = c("(1) Store 10", "(2) Store 10 + Date","(3) Store 10 + Date + Store Size","(4) Store 10 and all variables"),show.ci=FALSE,collapse.se=TRUE, p.threshold = c(0.1, 0.05, 0.01,0.001),p.style = "stars", string.se = "std. Error", string.p = "p-value",transform=NULL, show.std="std")
+
+
+# Print the table
+print(model_table_stdbeta)
+```
+
+So, let's trim back the variable that includes the answer and the Type (A, B or C):
+
+```{r}
+#| label: printModel2
+#| echo: true
+#| message: true
+
+# Remove Sales_by_sqfeet since it includes sales in its formula!
+df1 <- select(df,-c(Sales_by_sqfeet, Type))
+mNewAll <- lm(Weekly_Sales ~ ., data=df1)
+summary(lm.beta(mNewAll))
+head(df1)
+
+model_table_stdbeta2 <- tab_model(m1, m2, m3,mNewAll,dv.labels = c("(1) Store 10", "(2) Store 10 + Date","(3) Store 10 + Date + Store Size","(4) Store 10 and all variables"),show.ci=FALSE,collapse.se=TRUE, p.threshold = c(0.1, 0.05, 0.01,0.001),p.style = "stars", string.se = "std. Error", string.p = "p-value",transform=NULL, show.std="std")
+
+
+# Print the table
+print(model_table_stdbeta2)
+
+
+```
+
+## **Extra:**
+
+### **Using Sales by Square Feet instead**
+
+```{r}
+#| label: SalesBySqFt
+#| echo: true
+#| message: true
+
+n1<-lm(Sales_by_sqfeet~Store10+Date,data=df)
+summary(lm.beta(n1))
+#options(scipen=999)
+n2<-lm(Sales_by_sqfeet~.,data=df)
+summary(lm.beta(n2))
+
+```
+
+### **Predictions**
+
+```{r}
+#| label: Predictions
+#| echo: true
+#| message: true
+
+#We can make predictions using one of our models, for example model 3
+tail(df%>%filter(Store10==1)%>%select(Date,Size))
+#use predict(model,test dataset) function
+#For an individual data-point:
+predict(m3,data.frame(Store10=1,Date=ymd("2012-11-3"),Size=126512))
+predict(m3,data.frame(Store10=1,Date=ymd("2012-11-10"),Size=126512))
+predict(m3,data.frame(Store10=1,Date=ymd("2012-11-17"),Size=126512))
+predict(m3,data.frame(Store10=1,Date=ymd("2012-11-24"),Size=126512))
+
+#Later, we'll learn to split datasets in two; one for training and one for testing. 
+
+```
+
+### Stepwise Regression
+
+```{r}
+#| label: StepwiseRegression
+#| echo: true
+#| message: true
+
+model <- lm(Weekly_Sales ~ ., data = df)
+summary(model)
+
+# Perform stepwise regression
+#direction can be both, backward or forward
+#trace can be set to 0 to only display final result or higher to display more information
+step_model <- step(model, direction = "backward",trace=999)
+#backward starts with everything and drops non-significant values. 
+
+
+# View the summary of the stepwise model
+summary(step_model)
+
+#For more info: https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/step 
+
+```
