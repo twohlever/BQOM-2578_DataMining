@@ -1,0 +1,68 @@
+---
+title: "Class "
+subtitle: "BQOM 2578 | Data Mining"
+date: ", 2025" 
+author: "Theresa Wohlever"
+editor: source
+format:
+  pdf:
+    toc: true
+    toc-depth: 2
+    number-sections: false
+    mainfont: "Georgia"
+    sansfont: "Avenir"
+    monofont: "Menlo"
+    mathfont: "STIX Two Math"
+    pdf-engine: xelatex
+---
+
+# Executive Summary
+
+## Loading packages
+
+```{r}
+#| label: LoadPackages
+#| echo: false
+#| message: false
+#| results: 'hide'
+
+rm(list = ls())
+
+library(tidyverse)
+library("lm.beta")
+
+setwd("/Users/theresawohlever/git_repos/BQOM-2578_DataMining/BQOM-2578_DataMining_twohlever/assignments/03")
+
+
+```
+
+## Importing data
+
+```{r}
+#| label: ImportData
+#| echo: false
+#| message: false
+#| results: 'hide'
+
+
+```
+
+
+
+## Importing data
+
+```{r}
+#| label: plot 
+#| echo: true
+#| message: true
+#| fig-width: 7
+#| fig-height: 7
+
+
+
+```
+
+
+
+
+
