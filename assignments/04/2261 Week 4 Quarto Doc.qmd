@@ -1,0 +1,447 @@
+---
+title: "Logistic Regression with Credit Data"
+format: docx
+editor: visual
+---
+
+## Loading packages
+
+Lets start by calling some libraries that are useful for Logistic Regressions.
+
+-   caTools for splitting the data in a smart way.
+
+-   ROCR for creating ROC and AUC curves.
+
+-   caret for Machine Learning in general.
+
+```{r}
+
+#After installing comment the install.packages commands
+#install.packages("tidyverse")
+#install.packages("corrplot")
+#install.packages("caTools")
+#install.packages("ROCR")
+#install.packages("caret")
+library(caTools)
+library(ROCR)
+library(caret)
+library(tidyverse)
+library(corrplot)
+
+```
+
+## Importing data
+
+We are using a *loans* dataset from Taiwan, Credit_data.csv, which is available on Canvas. Download it to your working folder and use getwd() and setwd() if you need to change your working directory.
+
+```{r}
+#read.csv will read the csv into a dataframe, which we can manipulate in R.
+loans = read.csv("Credit_data.csv", stringsAsFactors = TRUE)
+
+head(loans)
+
+summary(loans)
+
+```
+
+Here is information for some of the key variables:
+
+-   Limit: Amount of given credit, in 1,000 New Taiwan Dollars (1 USD is approx. 30 NTD, checked in Sept, 2025)
+
+-   Gender: 1 = male; 2 = female;
+
+-   Marital status: 1 = married; 2 = single/other;
+
+-   Late i: whether the person was late i months ago;
+
+-   Default: dependent variable (0/1); if the client defaulted (1) or not (0)
+
+Note how gender and Marital Status have 1 and 2 rather than 0 and 1 as we prefer for dummies. We can let R handle this for us.
+
+```{r}
+table(loans$Default)
+summary(loans$Default)
+
+paste("The proportion of customers defaulting is: ",round(mean(loans$Default),2))
+```
+
+## Preliminary Analysis
+
+Let's begin with evaluating the Correlation Matrix
+
+```{r}
+
+loans<-loans%>%relocate(Default)  # moves the variable "Default" to the first column (left hand side)
+head(loans)
+
+cormat <- round(cor(loans),2)
+
+#corrplot(cormat)
+corrplot(cormat, type="upper",diag=FALSE, tl.cex=1.2)
+#corrplot(cormat, method="number", type="upper",diag=FALSE, tl.cex=1.2)
+#
+# comment out the ones you don't want
+#
+```
+
+## Logistic Regression Models
+
+Formula is very simple: glm(y \~ X, family="binomial").
+
+For variables that we want to treat as factors (categorical variables) we use as.factor. R will change it to a dummy, taking the lowest value as 0.
+
+Specifically, after using as.factor(Gender), 1 will become 0 and 2 will become 1.
+
+```{r}
+
+logreg0 = glm(Default ~ Limit, data=loans, family="binomial")
+summary(logreg0)
+
+logreg = glm(Default ~ Limit + as.factor(Gender) + as.factor(MaritalStatus)
+             + Age + Late1 + Late2 + Late3, data=loans, family="binomial")
+summary(logreg)
+
+
+```
+
+Let's examine the coefficients β and exp(β):
+
+```{r}
+coef(logreg)
+exp(coef(logreg))
+
+coeftable<-data.frame(col1=coef(logreg),col2=exp(coef(logreg)))
+colnames(coeftable)<-c('Coefficient (log-odds)','e^coefficient (odds)')
+coeftable
+
+#
+# Go to the Global Environment and click on Coeftable for another view
+#
+```
+
+## Confusion Matrix
+
+What we get from the logistic regression are predicted probabilities. What we need to convert them into classification decisions is a threshold or cutoff.
+
+```{r}
+loans$PredProbs1<-predict(logreg, newdata=loans, type="response")  
+# type="response" gives the probability, otherwise the output would be log odds.
+summary(loans$PredProbs1)
+
+#We then transform that prediction into either 1 (True) or 0 (False) using a cutoff point
+cutoff<-0.25
+#Try different cutoff points:
+#cutoff<-0.15   # Note the Probs don't change, just the classification
+#cutoff<-0.05
+loans$PredDefault1<-ifelse(loans$PredProbs1>=cutoff,1,0)
+summary(loans$PredDefault1)
+paste("For a cutoff point of",cutoff, "the proportion of customers classified as defaulting is", round(mean(loans$PredDefault1),2))
+head(loans)
+tail(loans)
+```
+
+Let's see what is the combination of Predicted vs Observed Default values (Try with different cutoffs above.)
+
+```{r}
+paste("Observed Default values:")
+table(loans$Default)
+paste("Predicted Default values:")
+table(loans$PredDefault1)
+
+paste("Observed by predicted values (confusion matrix) for cutoff of", cutoff, "is:")
+
+#first variable is rows, second variable is columns
+ConfMatrix<-table(loans$Default,loans$PredDefault1)  # table() with two variables will cross classify them
+rownames(ConfMatrix)<-c("Obs False", "Obs True")
+colnames(ConfMatrix)<-c("Pred False", "Pred True")
+ConfMatrix
+
+```
+
+The below function does that. Easier to copy and paste in the future. Use it to test multiple cutoff points.
+
+```{r}
+#defining a new function called ConfMatrix with three inputs:  Actual, Predicted and Cutoff
+ConfMatrix<-function(actual_value,predicted_prob,cutoff){   
+  predicted_value<-ifelse(predicted_prob>=cutoff,1,0)  # Classify by evaluating probability against the cutoff
+  ConfMatrix<-table(actual_value,predicted_value)
+  rownames(ConfMatrix)<-c("Obs False", "Obs True")
+  colnames(ConfMatrix)<-c("Pred False", "Pred True")
+  
+  print(paste("For a cutoff of", cutoff,":"))
+  print("Actual values in the test dataset")
+  print(table(actual_value))
+  print("Predicted values in the test dataset")
+  print(table(predicted_value))
+
+  return(ConfMatrix)
+}
+```
+
+Let's try it out:
+
+```{r}
+ConfMatrix(loans$Default,loans$PredProbs1,0.25)
+
+#ConfMatrix(loans$Default,loans$PredProbs1,0.15)
+#ConfMatrix(loans$Default,loans$PredProbs1,0.05)
+```
+
+Now, calculate the performance measures of the confusion matrix:
+
+```{r}
+predicted_value<-loans$PredDefault1
+actual_value<-loans$Default
+
+#True Negative means it was predicted negative and it is indeed negative. 
+TN<-sum(predicted_value==0 & actual_value==0)
+#False Negative means it was predicted negative and it is actually positive.  
+FN<-sum(predicted_value==0 & actual_value==1)
+#False Positive means it was predicted true and it is actually false.
+FP<-sum(predicted_value==1 & actual_value==0)
+#True Positive means it was predicted true and it is indeed true. 
+TP<-sum(predicted_value==1 & actual_value==1)
+
+# Note that the logical operator "&" is used for an eval at the level of each element of the vector, whereas "&&" would only do the first element
+
+
+print(paste("There are",TN," True Negatives"))
+print(paste("There are",FN," False Negatives"))
+print(paste("There are",FP," False Positives"))
+print(paste("There are",TP," True Positives"))
+print("As a result:")
+
+#Getting Accuracy, Sensitivity, Specificity and Precision:
+#Accuracy is the number of correct predictions over the total
+ACCU<-(TN+TP)/(TN+TP+FN+FP)
+#True Positive Rate (TPR), also called Sensitivity or recall is the number of correct positive predictions over total positives in the dataset.
+TPR<-TP/(TP+FN)
+#True Negative Rate (TFR), also called Specificityis the number of correct negative predictions over total negatives in the dataset.
+TNR<-TN/(TN+FP)
+#Precision, also called Positive Predictive Value (PPV),is the number of TP over the total number of predicted positives. 
+PPV<-(TP)/(TP+FP)
+print(paste("Accuracy is:", round(ACCU,4)))
+print(paste("True Positive Rate is:", round(TPR,4)))
+print(paste("True Negative Rate is:", round(TNR,4)))
+print(paste("Precision PPV is:", round(PPV,4)))
+```
+
+As you can imagine, there are packages that include functions to directly do what we did 'manually' coded above. In this case, the package is caret.
+
+However, you need to have created the predicted values based on your selected cutoff PRIOR to calling this function.
+
+```{r}
+# the PredDefault1 was calculated already with a chosen Cutoff
+confusionMatrix(data=as.factor(loans$PredDefault1),reference=as.factor(loans$Default))
+```
+
+What?? These numbers are completely different! Why? Let's look at the help file (remember this is in the Caret Package)
+
+```{r}
+?confusionMatrix
+
+# the table is flipped, AND the 0 and 1 are reversed too!!
+# the parameter "positive" might be able to help us - let's try
+
+confusionMatrix(data=as.factor(loans$PredDefault1),reference=as.factor(loans$Default), positive = "1")
+```
+
+That looks better!!
+
+We can also just keep creating our own functions for our own purposes, in this case passing a Cutoff to the function call:
+
+```{r}
+MyConfMatrixValues<-function(actual_value,predicted_prob,cutoff){
+  
+  predicted_value<-ifelse(predicted_prob>=cutoff,1,0)   # Apply the Cutoff
+  
+  ConfMatrix<-table(actual_value,predicted_value)
+  rownames(ConfMatrix)<-c("Obs False", "Obs True")
+  colnames(ConfMatrix)<-c("Pred False", "Pred True")
+  
+  print(paste("For a cutoff of", cutoff,":"))
+  print("Actual values in the test dataset")
+  print(table(actual_value))
+  print("Predicted values in the test dataset")
+  print(table(predicted_value))
+  
+  #predicted_value<-ifelse(predicted_prob>=cutoff,1,0)
+  #True Negative means it was predicted negative and it is indeed negative. 
+  TN<-sum(predicted_value==0 & actual_value==0)
+  #False Negative means it was predicted negative and it is actually positive.  
+  FN<-sum(predicted_value==0 & actual_value==1)
+  #False Positive means it was predicted true and it is actually false.
+  FP<-sum(predicted_value==1 & actual_value==0)
+  #True Positive means it was predicted true and it is indeed true. 
+  TP<-sum(predicted_value==1 & actual_value==1)
+  
+  print(paste("There are",TN," True Negatives"))
+  print(paste("There are",FN," False Negatives"))
+  print(paste("There are",FP," False Positives"))
+  print(paste("There are",TP," True Positives"))
+
+#Getting Accuracy, Sensitivity, Specificity and Precision:
+#Accuracy is the number of correct predictions over the total
+  ACCU<-(TN+TP)/(TN+TP+FN+FP)
+#True Positive Rate (TPR), also called Sensitivity or recall is the number of correct positive predictions over total positives in the dataset.
+  TPR<-TP/(TP+FN)
+#True Negative Rate (TFR), also called Specificityis the number of correct negative predictions over total negatives in the dataset.
+  TNR<-TN/(TN+FP)
+#Precision, also called Positive Predictive Value (PPV),is the number of TP over the total number of predicted positives. 
+  PPV<-(TP)/(TP+FP)
+
+  print("As a result:")
+  print(paste("Accuracy is:", round(ACCU,4)))
+  print(paste("True Positive (Sensitivity) Rate is:", round(TPR,4)))
+  print(paste("True Negative (Specificity) Rate is:", round(TNR,4)))
+  print(paste("Precision PPV is:", round(PPV,4)))
+
+    ConfMatrixValues<-data.frame(TN,FN,FP,TP,ACCU,TPR,TNR)
+  return(ConfMatrix)
+}
+```
+
+Now that we defined the function, let's use it:
+
+```{r}
+MyConfMatrixValues(loans$Default,loans$PredProbs1,0.25)
+```
+
+ROC (Receiver Operating Characteristic) Curve
+
+Instead of manually trying different cutoff points, we can use the ROC Curve.\
+This also gives us the Area Under the Curve (AUC), which we can use to compare the model performance with other models:
+
+```{r}
+# We'll use the function "prediction" (note: NOT predict),
+# which transforms the predicted probabilities (first argument) 
+# and the actual 0/1 values (second argument)
+# into a standardized format of class prediction, and store them into
+# the object roc.pred...
+
+roc.pred = prediction(loans$PredProbs1, loans$Default)
+# ... which we can then use to actually create the ROC curve
+# with the function "performance" (note: we need to store this
+# so that we can then draw the curve):
+perf = performance(roc.pred, "tpr", "fpr")
+#If you don't get what it is doing: ?performance 
+
+
+plot(perf,                      # the data
+     main = "ROC Curve",        # the chart's title
+     xlab = "1 - Specificity",  # the name of the x-axis
+     ylab = "Sensitivity",      # the name of the y-axis
+     colorize=TRUE)             # add color to curve depending on threshold prob.
+
+# ... and add the diagonal corresponding to the Random Assignment
+# benchmark model: 
+
+abline(0,1) # adds line at intercept 0, with slope 1
+
+
+perf_auc = performance(roc.pred, "auc")
+as.numeric(perf_auc@y.values)
+```
+
+That is, our first model; logreg, has an area under the curve of 0.745. How does that compare to the baseline? (AUC=0.5).
+
+How can we increase specificity? Let's say we want a specificity of at least 90%.
+
+```{r}
+#That puts us in the green area of about 0.4
+MyConfMatrixValues(loans$Default,loans$PredProbs1,0.4)
+```
+
+## Comparing Models
+
+Let's make another model with no demographic factors to avoid discrimination. Let's see the original and the new model.
+
+```{r}
+summary(logreg)
+
+logreg2 = glm(Default ~ Limit + Late1 + Late2 + Late3, data=loans, family="binomial")
+summary(logreg2)
+```
+
+What do you see in the results? What does the AIC tell you?
+
+Let's find the new model's ROC and AUC next:
+
+```{r}
+#1. Make predictions:
+loans$PredProbs2<-predict(logreg2, newdata=loans, type="response")
+
+#2 Get the ROC and AUC:
+roc.pred = prediction(loans$PredProbs2, loans$Default)
+# ... which we can then use to actually create the ROC curve
+# with the function "performance" (note: we need to store this
+# so that we can then draw the curve):
+perf = performance(roc.pred, "tpr", "fpr")
+#If you don't get what it is doing: ?performance 
+
+
+plot(perf,                      # the data
+     main = "ROC Curve",        # the chart's title
+     xlab = "1 - Specificity",  # the name of the x-axis
+     ylab = "Sensitivity",      # the name of the y-axis
+     colorize=TRUE)             # add color to curve depending on threshold prob.
+
+# ... and add the diagonal corresponding to the Random Assignment
+# benchmark model: 
+
+abline(0,1) # adds line at intercept 0, with slope 1
+
+
+perf_auc = performance(roc.pred, "auc")
+as.numeric(perf_auc@y.values)
+```
+
+How would you characterize the AUC difference between the models?
+
+Which on should we use?
+
+```{r}
+MyConfMatrixValues(loans$Default,loans$PredProbs2,cutoff=0.55)
+```
+
+## Train and Test datasets
+
+So far, we have been training and testing in the same dataset.
+
+Usually, we would train the model on a dataset (or a portion of the data we have) and test it in another dataset (or another portion). These portions are often called "partitions"
+
+```{r}
+#Our split should be random but we would also like to have the same "random" results
+#By setting a seed we ensure everyone using the same seed gets the same "random" results. 
+
+set.seed(1020, sample.kind = "Rejection")
+df<-loans
+spl = sample(nrow(df),0.8*nrow(df))
+head(spl)
+
+# Now lets split our dataset into train and test:
+
+train.df = df[spl,]
+test.df = df[-spl,]
+dim(df)
+dim(train.df)
+dim(test.df)
+```
+
+With this approach, we would train the model on the train portion of the dataset:
+
+```{r}
+logreg2b = glm(Default ~ Limit + Late1 + Late2 + Late3, data=train.df, family="binomial")
+summary(logreg2b)
+```
+
+Then, we can test it with a test dataset:
+
+```{r}
+test.df$PredProbs2b<-predict(logreg2b, newdata=test.df, type="response")
+MyConfMatrixValues(test.df$Default,test.df$PredProbs2b,cutoff=0.55)
+```
+
+How do you find the performance to fare between Training and Testing?
+
+Regression analysis are statistically robust, but that will no longer be the case when we move to decision trees, which are more prone to overfitting.
