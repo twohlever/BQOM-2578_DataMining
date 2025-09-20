@@ -16,7 +16,6 @@ format:
     pdf-engine: xelatex
 ---
 
-
 # Assignment Instructions
 
 https://canvas.pitt.edu/courses/324587/assignments/1871892
@@ -31,13 +30,9 @@ Decide how to present your final results; one model, several models? Which forma
 
 In the last section, describe your final conclusions grounded on your regression analysis and visualizations.
 
-
 # Executive Summary
 
-For Each variable is it categorical or continuous?
-3 regressions on data
-evaluate models
-
+For Each variable is it categorical or continuous? 3 regressions on data evaluate models
 
 # Data Preparation
 
@@ -62,12 +57,15 @@ library("lm.beta")
 working_directory <- "/Users/theresawohlever/git_repos/BQOM-2578_DataMining/BQOM-2578_DataMining_twohlever/assignments/03-Regressions"
 setwd(working_directory)
 
-CSV_base_filename <- "IHME-GBD_2021_DATA-dcd5bf12-1"
+CSV_base_filename <- "hospital extract 2023"
 CSV_IN_FILE <- paste(working_directory, "/", "raw_data/", CSV_base_filename, ".csv", sep = "")
 CSV_OUT_FILE <- paste(working_directory, "/", CSV_base_filename, "_processed.csv", sep = "")
 
-```
+CSV_S_base_filename <- "SuicideByCounty"
+CSV_S_IN_FILE <- paste(working_directory, "/", "raw_data/", CSV_S_base_filename, ".csv", sep = "")
+CSV_S_OUT_FILE <- paste(working_directory, "/", CSV_S_base_filename, "_processed.csv", sep = "")
 
+```
 
 ## Importing data
 
@@ -78,14 +76,17 @@ CSV_OUT_FILE <- paste(working_directory, "/", CSV_base_filename, "_processed.csv
 #| results: 'hide'
 
 # read.csv will read the csv into a dataframe, which we can manipulate in R.
-ihme_raw_df = read.csv(CSV_IN_FILE, stringsAsFactors = TRUE)
+raw_df = read.csv(CSV_IN_FILE, stringsAsFactors = TRUE)
+head(raw_df)
+summary(raw_df)
 
-head(ihme_raw_df)
-summary(ihme_raw_df)
+
+raw_s_df = read.csv(CSV_S_IN_FILE, stringsAsFactors = TRUE)
+head(raw_s_df)
+summary(raw_s_df)
+
 
 ```
-
-
 
 ## Data Cleaning & Wrangling
 
@@ -94,23 +95,87 @@ summary(ihme_raw_df)
 #| echo: true
 #| message: true
 
-# Clean out columns duplicated with id's
-df <- ihme_raw_df[, !names(ihme_raw_df) %in% c("measure_name", "location_name", "sex_name", "age_name", "cause_name", "rei_name", "metric_name")]
+selected_cols <- c("facility_id", 
+               "facility_county",
+               "type_of_organization",
+               "type_of_services",
+               "other_types_of_services",
+               "children_hospital",
+               "hospital_ltc",
+               "on_site_ltc",
+               "privateroomexist",
+               "semiprivateroomexist",
+               "discharges017",
+               "discharges1864",
+               "discharges65over",
+               "dischargestotal",
+               "alcohol_drug_detox",
+               "alcoholdetox_beds_lic",
+               "alcoholdetox_beds_staf",
+               "alcoholdetox_admissions",
+               "alcoholdetox_patient_days",
+               "alcoholdetox_bed_days_avail",
+               "alcoholdetox_beds_lic_vs_staf",
+               "alcoholdetox_adm_vs_pat_days",
+               "alcohol_drug_treat",
+               "alcoholtreat_closing_date",
+               "alcoholtreat_beds_lic",
+               "alcoholtreat_beds_staf",
+               "alcoholtreat_admissions",
+               "alcoholtreat_patient_days",
+               "alcoholtreat_bed_days_avail",
+               "alcoholtreat_beds_lic_vs_staf",
+               "alcohol_drug_treat_adm_vs_pat_days",
+               "comprehensive_rehab",
+               "comprehensive_rehab_beds_lic",
+               "Comprehensive_rehab_beds_staf",
+               "Comprehensive_rehab_admissions",
+               "Comprehensive_rehab_patient_days",
+               "Comprehensive_rehab_bed_days_avail",
+               "comprehensive_rehab_beds_lic_vs_staf",
+               "comprehensive_rehab_adm_vs_pat_days",
+               "psych_0to17",
+               "psych_0to17_beds_lic",
+               "psych_0to17_beds_staf",
+               "psych_0to17_admissions",
+               "psych_0to17_patient_days",
+               "psych_0to17_bed_days_avail",
+               "psych_0to17_beds_lic_vs_staf",
+               "psych_over17",
+               "psych_over17_closing_date",
+               "psych_over17_beds_lic",
+               "psych_over17_beds_staf",
+               "psych_over17_admissions",
+               "psych_over17_patient_days",
+               "psych_over17_bed_days_avail",
+               "psych_over17_bed_days_avail_check",
+               "psych_over17_patient_days_check",
+               "psych_over17_beds_lic_vs_staf",
+               "detox",
+               "clinpsyc",
+               "clinic_psychiatric",
+               "psychiatrists",
+               "ft_staff"
+               )
+# Keep only columns related to model 
+## Only select columns that actually exist in the raw data
+selected_cols <- selected_cols[!selected_cols %in% setdiff(selected_cols, names(raw_df)) ]
+df <- subset(raw_df, select = selected_cols )
 
-# Create Target; Isolate Mental Disorder
-df <- df %>% mutate(IsMentalDisorder = ifelse(cause_id == 558, 1, 0))
+#
+## Combine with county suicide data
+#
+df <- merge(df, raw_s_df, by.x = "facility_county", by.y = "CountyState")
 
-# Remove column name used to determine target value
-df$cause_id <- NULL
+# Keep only columns related to model 
+## Only select columns that actually exist in the raw data
+selected_cols[!selected_cols %in% c("facility_county", "CountyState")]
+selected_cols <- c(selected_cols,"Obs_Count", "Population" )
+selected_cols <- selected_cols[!selected_cols %in% setdiff(selected_cols, names(df)) ]
+df <- subset(df, select = selected_cols )
 
-
-# Wrangle
-# df$Deaths <- as.factor(df$Deaths)           # convert to Factor
-# df$Date<-ymd(df$Date)                 # properly interrupt date field
 
 ```
-
-
 
 ```{r}
 #| label: ReviewData
@@ -121,7 +186,6 @@ summary(df)
 
 
 ```
-
 
 ## Preliminary Analysis
 
@@ -134,7 +198,17 @@ Evaluate Correlation Matrix
 #| fig-width: 7
 #| fig-height: 11
 
-df <-df %>% relocate(IsMentalDisorder)  # moves the target variable to the first column (left hand side)
+## Prep for correlation
+df <- df %>% rename(target = Obs_Count)
+
+# Wrangle -- convert all character strings to Factors
+Cols2Factors <- names(select(df, where(~ !is.numeric(.))))
+df <- df %>% mutate(across(where(is.character), as.factor))
+
+
+
+
+df <-df %>% relocate(target)  # moves the target variable to the first column (left hand side)
 cor_mat <- cor(df)
 
 cor_mat_plot <- round(cor_mat, 2)
@@ -143,7 +217,6 @@ corrplot(cor_mat_plot, method="number", type="upper", diag=FALSE)
 
 
 ```
-
 
 # Regression
 
@@ -154,16 +227,15 @@ corrplot(cor_mat_plot, method="number", type="upper", diag=FALSE)
 #| echo: true
 #| message: true
 
-m_sex<-lm(IsMentalDisorder ~ sex_id, data=df)
+m_sex<-lm(Obs_Count ~ sex_id, data=df)
 summary(m_sex)
 
-m_sex_age <-lm(IsMentalDisorder ~ sex_id + age_id, data=df)
+m_sex_age <-lm(Obs_Count ~ sex_id + age_id, data=df)
 summary(m_sex_age)
 
 anova(m_sex, m_sex_age)
 
 ```
-
 
 ### Stepwise Linear Regression
 
@@ -172,7 +244,7 @@ anova(m_sex, m_sex_age)
 #| echo: true
 #| message: true
 
-model <- lm(IsMentalDisorder ~ ., data = df)
+model <- lm(Obs_Count ~ ., data = df)
 summary(model)
 
 # Perform stepwise regression
@@ -189,8 +261,8 @@ summary(step_model)
 
 ```
 
-
 # References
 
-Global Burden of Disease Collaborative Network. Global Burden of Disease Study 2021 (GBD 2021) Results. Seattle, United States: Institute for Health Metrics and Evaluation (IHME), 2022. Available from https://vizhub.healthdata.org/gbd-results/.
+Hospital Data: https://www.pa.gov/agencies/health/health-statistics/health-facilities/hospital-reports
 
+Suicide by County Data: https://www.phaim.health.pa.gov/EDD/WebForms/DeathCntySt.aspx
