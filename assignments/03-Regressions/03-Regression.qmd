@@ -98,8 +98,6 @@ summary(raw_s_df)
 selected_cols <- c("facility_id", 
                "facility_county",
                "type_of_organization",
-               "type_of_services",
-               "other_types_of_services",
                "children_hospital",
                "hospital_ltc",
                "on_site_ltc",
@@ -166,14 +164,61 @@ df <- subset(raw_df, select = selected_cols )
 ## Combine with county level suicide data
 #
 df <- merge(df, raw_s_df, by.x = "facility_county", by.y = "CountyState")
+df_merged <- df ## Save state
 
-# Keep only columns related to model 
+
+# Only Keep relevant columns for predicting county suicide rate 
 ## Only select columns that actually exist in the raw data
 selected_cols <- selected_cols[!selected_cols %in% c("facility_county", "CountyState")]
-selected_cols <- c(selected_cols,"Obs_Count", "Population" )
+selected_cols <- c(selected_cols,"Obs_Count") # , "Population" )
 selected_cols <- selected_cols[!selected_cols %in% setdiff(selected_cols, names(df)) ]
 df <- subset(df, select = selected_cols )
 
+####
+####
+#
+# Clean Up Values
+#
+df <- df %>% rename(target = Obs_Count)
+
+Cols2Numeric <- c(
+  "target" #,
+#  "Population"
+)
+# Remove formatting from character strings like commas or currency symbols
+df <- df %>%
+  mutate(across(.cols = all_of(Cols2Numeric), 
+    ~ as.numeric(gsub("[^0-9.]", "", as.character(.)))))
+df <- df %>%
+  mutate(across(.cols = all_of(Cols2Numeric),
+    ~ as.numeric(.)
+  ))
+
+
+## Convert Columns with Yes/No values to 0/1 Values
+YesNo2Numeric <- df_merged %>%
+   select(where(~ any(str_detect(as.character(.), regex("yes", ignore_case = TRUE)), na.rm = TRUE))) %>%
+   names()
+
+df <- df %>%
+  mutate(across(.cols = all_of(YesNo2Numeric),
+    ~ as.numeric(factor(.,
+      levels = c("No", "Yes"))) - 1
+  ))
+
+## Convert other columns with strings to numbers
+Cols2Factors <- c(
+  "type_of_organization",
+  "clinic_psychiatric"
+)
+# Convert character strings to Factors to Ints
+df$type_of_organization <- as.integer(factor(df_merged$type_of_organization))
+
+
+# Unique number already the initial character for clinic_psychiatric col
+df <- df %>%
+  mutate(clinic_psychiatric = str_sub(clinic_psychiatric, 1, 1))
+df$clinic_psychiatric <- as.integer(factor(df_merged$clinic_psychiatric))  
 
 ```
 
@@ -195,47 +240,31 @@ Evaluate Correlation Matrix
 #| label: CorrelationMatrix
 #| echo: true
 #| message: true
-#| fig-width: 7
-#| fig-height: 11
+#| fig-width: 8
+#| fig-height: 10
 
 ## Prep for correlation
-df <- df %>% rename(target = Obs_Count)
-
-Cols2Numeric <- c(
-  "target",
-  "Population"
-)
-df <- df %>% mutate(across(Cols2Numeric, as.numeric))
-df$target <- as.numeric(as.character(df$target))
-
-# Wrangle -- convert character strings to Factors
-Cols2Factors <- c( 
-    "type_of_organization",
-    "type_of_services",
-    "children_hospital",
-    "hospital_ltc",   
-    "on_site_ltc",
-    "privateroomexist",
-    "semiprivateroomexist",
-    "detox",
-    "clinpsyc",
-    "clinic_psychiatric"
-  )
-  
-df <- df %>% mutate(across(Cols2Factors, as.factor))
-df <- df %>%
-  mutate(across(where(is.factor), ~ as.numeric(as.character(.))))
-
-df <-df %>% relocate(target)  # moves the target variable to the first column (left hand side)
+# df <-df %>% relocate(target)  # moves the target variable to the first column (left hand side)
+df_cor <- df
 
 cor_mat <- cor(df)
-cols_above_threshold <- which(apply(cor_mat, 2, function(col) any(abs(col) > 0.6)))
+cor_threshold <- 0.2
+cor_threshold_count <- 2
+
+cols_above_threshold <- which( colSums(abs(cor_mat) > cor_threshold, na.rm = TRUE) >= cor_threshold_count)
 df <- subset(df, select = colnames(cor_mat)[cols_above_threshold] )
 cor_mat <- cor(df)
 
 cor_mat_plot <- round(cor_mat, 2)
 cor_mat_plot[is.na(cor_mat_plot)] <- 0 # Replace all NA values with zero
-corrplot(cor_mat_plot, method="number", type="upper", diag=FALSE)
+corrplot(cor_mat_plot, 
+  method="square",
+  type="upper",
+  order="AOE", 
+  tl.col="darkgrey",
+  cl.align.text = "r",
+  diag=FALSE, 
+  number.cex=0.6)
 
 
 ```
@@ -245,17 +274,39 @@ corrplot(cor_mat_plot, method="number", type="upper", diag=FALSE)
 ## Linear Regression
 
 ```{r}
-#| label: LinearRegression1
+#| label: LinearRegressionSingePredictorBakeOff
 #| echo: true
 #| message: true
 
-m_sex<-lm(Obs_Count ~ sex_id, data=df)
-summary(m_sex)
 
-m_sex_age <-lm(Obs_Count ~ sex_id + age_id, data=df)
-summary(m_sex_age)
+# Assuming df is your dataframe and 'y' is the response variable
+response <- "target"
+predictors <- setdiff(names(df), response)
 
-anova(m_sex, m_sex_age)
+best_r2 <- -Inf
+best_model <- NULL
+best_predictor <- NULL
+
+for (predictor in predictors) {
+  formula <- as.formula(paste(response, "~", predictor))
+  model <- lm(formula, data = df)
+  r2 <- summary(model)$r.squared
+  # For RMSE alternative:
+  # pred <- predict(model, df)
+  # rmse <- sqrt(mean((df[[response]] - pred)^2))
+  
+  if (r2 > best_r2) {
+    best_r2 <- r2
+    best_model <- model
+    best_predictor <- predictor
+  }
+}
+
+cat("Best single-predictor model uses:", best_predictor, "with R^2 =", best_r2, "\n")
+# To view details of best_model:
+summary(best_model)
+
+
 
 ```
 
@@ -266,20 +317,18 @@ anova(m_sex, m_sex_age)
 #| echo: true
 #| message: true
 
-model <- lm(Obs_Count ~ ., data = df)
+# For more info: https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/step 
+
+model <- lm(target ~ ., data = df)
 summary(model)
 
 # Perform stepwise regression
-#direction can be both, backward or forward
-#trace can be set to 0 to only display final result or higher to display more information
-step_model <- step(model, direction = "backward",trace=999)
-#backward starts with everything and drops non-significant values. 
+step_model_back <- step(model, direction = "backward",trace=999)
+summary(step_model_back)
 
+step_model_forward <- step(model, direction = "forward",trace=999)
+summary(step_model_forward)
 
-# View the summary of the stepwise model
-summary(step_model)
-
-#For more info: https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/step 
 
 ```
 
