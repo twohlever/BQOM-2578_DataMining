@@ -46,13 +46,13 @@ For Each variable is it categorical or continuous? 3 regressions on data evaluat
 
 rm(list = ls())
 
-library(caTools)
-library(ROCR)
-library(caret)
+# library(caTools)
+# library(ROCR)
+# library(caret)
 library(tidyverse)
 library(corrplot)
 library(tidyverse)
-library("lm.beta")
+# library("lm.beta")
 
 working_directory <- "/Users/theresawohlever/git_repos/BQOM-2578_DataMining/BQOM-2578_DataMining_twohlever/assignments/03-Regressions"
 setwd(working_directory)
@@ -92,7 +92,7 @@ summary(raw_s_df)
 
 ```{r}
 #| label: CreateTarget
-#| echo: true
+#| echo: false
 #| message: true
 
 selected_cols <- c("facility_id", 
@@ -240,16 +240,9 @@ df_norm <- as.data.frame(lapply(df, minMax))
 df_long <- pivot_longer(df_norm, cols = -target, names_to = "variable", values_to = "value")
 ggplot(df_long, aes(x = target, y = value, color = variable)) +
   geom_point(size=2) +
-  theme_minimal()
-
-
-## PCA
-df_numeric <- df[sapply(df, is.numeric)]
-pca_res <- prcomp(df_numeric, center = TRUE, scale. = TRUE)
-df_pca <- as.data.frame(pca_res$x)
-ggplot(df_pca, aes(x = PC1, y = PC2)) +
-  geom_point(size=2) +
-  theme_minimal()
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  guides(color = guide_legend(nrow = 6))
 
 ```
 
@@ -265,7 +258,6 @@ Evaluate Correlation Matrix
 #| fig-height: 10
 
 ## Prep for correlation
-# df <-df %>% relocate(target)  # moves the target variable to the first column (left hand side)
 df_cor <- df
 
 cor_mat <- cor(df)
@@ -292,7 +284,7 @@ corrplot(cor_mat_plot,
 
 # Regression
 
-## Linear Regression
+## Linear Regression by R Value
 
 Bake off by R squared
 
@@ -301,8 +293,6 @@ Bake off by R squared
 #| echo: true
 #| message: true
 
-
-# Assuming df is your dataframe and 'y' is the response variable
 response <- "target"
 predictors <- setdiff(names(df), response)
 
@@ -314,10 +304,7 @@ for (predictor in predictors) {
   formula <- as.formula(paste(response, "~", predictor))
   model <- lm(formula, data = df)
   r2 <- summary(model)$r.squared
-  # For RMSE alternative:
-  # pred <- predict(model, df)
-  # rmse <- sqrt(mean((df[[response]] - pred)^2))
-  
+
   if (r2 > best_r2) {
     best_r2 <- r2
     best_model <- model
@@ -333,7 +320,7 @@ summary(best_model)
 
 ```
 
-### Stepwise Linear Regression
+## Stepwise Linear Regression
 
 ```{r}
 #| label: StepwiseRegression
@@ -346,16 +333,16 @@ model <- lm(target ~ ., data = df)
 summary(model)
 
 # Perform stepwise regression
-step_model_back <- step(model, direction = "backward",trace=999)
+step_model_back <- step(model, direction = "backward",trace=0)
 summary(step_model_back)
 
-step_model_forward <- step(model, direction = "forward",trace=999)
+step_model_forward <- step(model, direction = "forward",trace=0)
 summary(step_model_forward)
 
 
 ```
 
-## Logistic Regression Models
+## Logistic Regression
 
 Formula is very simple: glm(y \~ X, family="binomial").
 
@@ -368,13 +355,20 @@ Specifically, after using as.factor(Gender), 1 will become 0 and 2 will become 1
 #| echo: true
 #| message: true
 
-logreg_ch = glm(target ~ children_hospital, data=df, family="gaussian")
+logreg_ch <- glm(target ~ children_hospital, data=df, family="gaussian")
 summary(logreg_ch)
 
-logreg_chdisch = glm(target ~ children_hospital  + discharges1864 + psych_over17
+logreg_chdisch <- glm(target ~ children_hospital  + discharges1864 + psych_over17
              + psych_over17_beds_lic, data=df, family="gaussian")
 summary(logreg_chdisch)
 
+
+logreg <- logreg_chdisch
+coef(logreg)
+exp(coef(logreg))
+coeftable<-data.frame(col1=coef(logreg),col2=exp(coef(logreg)))
+colnames(coeftable)<-c('Coefficient (log-odds)','e^coefficient (odds)')
+coeftable
 
 ```
 
