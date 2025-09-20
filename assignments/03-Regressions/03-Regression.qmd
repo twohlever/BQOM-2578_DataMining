@@ -163,13 +163,13 @@ selected_cols <- selected_cols[!selected_cols %in% setdiff(selected_cols, names(
 df <- subset(raw_df, select = selected_cols )
 
 #
-## Combine with county suicide data
+## Combine with county level suicide data
 #
 df <- merge(df, raw_s_df, by.x = "facility_county", by.y = "CountyState")
 
 # Keep only columns related to model 
 ## Only select columns that actually exist in the raw data
-selected_cols[!selected_cols %in% c("facility_county", "CountyState")]
+selected_cols <- selected_cols[!selected_cols %in% c("facility_county", "CountyState")]
 selected_cols <- c(selected_cols,"Obs_Count", "Population" )
 selected_cols <- selected_cols[!selected_cols %in% setdiff(selected_cols, names(df)) ]
 df <- subset(df, select = selected_cols )
@@ -192,7 +192,7 @@ summary(df)
 Evaluate Correlation Matrix
 
 ```{r}
-#| label: ReviewCorrelationMatrix
+#| label: CorrelationMatrix
 #| echo: true
 #| message: true
 #| fig-width: 7
@@ -201,14 +201,36 @@ Evaluate Correlation Matrix
 ## Prep for correlation
 df <- df %>% rename(target = Obs_Count)
 
-# Wrangle -- convert all character strings to Factors
-Cols2Factors <- names(select(df, where(~ !is.numeric(.))))
-df <- df %>% mutate(across(where(is.character), as.factor))
+Cols2Numeric <- c(
+  "target",
+  "Population"
+)
+df <- df %>% mutate(across(Cols2Numeric, as.numeric))
+df$target <- as.numeric(as.character(df$target))
 
-
-
+# Wrangle -- convert character strings to Factors
+Cols2Factors <- c( 
+    "type_of_organization",
+    "type_of_services",
+    "children_hospital",
+    "hospital_ltc",   
+    "on_site_ltc",
+    "privateroomexist",
+    "semiprivateroomexist",
+    "detox",
+    "clinpsyc",
+    "clinic_psychiatric"
+  )
+  
+df <- df %>% mutate(across(Cols2Factors, as.factor))
+df <- df %>%
+  mutate(across(where(is.factor), ~ as.numeric(as.character(.))))
 
 df <-df %>% relocate(target)  # moves the target variable to the first column (left hand side)
+
+cor_mat <- cor(df)
+cols_above_threshold <- which(apply(cor_mat, 2, function(col) any(abs(col) > 0.6)))
+df <- subset(df, select = colnames(cor_mat)[cols_above_threshold] )
 cor_mat <- cor(df)
 
 cor_mat_plot <- round(cor_mat, 2)
