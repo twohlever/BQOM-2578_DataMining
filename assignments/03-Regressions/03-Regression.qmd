@@ -1,7 +1,8 @@
 ---
 title: "Assignment 03 Regressions "
 subtitle: "BQOM 2578 | Data Mining"
-date: "September 28, 2025" 
+date: "September 28, 2025"
+date-format: "full"
 author: "Theresa Wohlever"
 editor: source
 format:
@@ -12,6 +13,7 @@ format:
     mainfont: "Georgia"
     sansfont: "Avenir"
     monofont: "Menlo"
+    monofontoptions: "Scale=0.6"
     mathfont: "STIX Two Math"
     pdf-engine: xelatex
 ---
@@ -43,6 +45,8 @@ For Each variable is it categorical or continuous? 3 regressions on data evaluat
 #| echo: false
 #| message: false
 #| results: 'hide'
+#| warning: false
+
 
 rm(list = ls())
 
@@ -74,6 +78,7 @@ CSV_S_OUT_FILE <- paste(working_directory, "/", CSV_S_base_filename, "_processed
 #| echo: false
 #| message: false
 #| results: 'hide'
+#| warning: false
 
 # read.csv will read the csv into a dataframe, which we can manipulate in R.
 raw_df = read.csv(CSV_IN_FILE, stringsAsFactors = TRUE)
@@ -94,6 +99,7 @@ summary(raw_s_df)
 #| label: CreateTarget
 #| echo: false
 #| message: true
+#| warning: false
 
 selected_cols <- c("facility_id", 
                "facility_county",
@@ -103,51 +109,29 @@ selected_cols <- c("facility_id",
                "on_site_ltc",
                "privateroomexist",
                "semiprivateroomexist",
-               "discharges017",
                "discharges1864",
-               "discharges65over",
                "dischargestotal",
                "alcohol_drug_detox",
-               "alcoholdetox_beds_lic",
-               "alcoholdetox_beds_staf",
-               "alcoholdetox_admissions",
                "alcoholdetox_patient_days",
-               "alcoholdetox_bed_days_avail",
                "alcoholdetox_beds_lic_vs_staf",
                "alcoholdetox_adm_vs_pat_days",
                "alcohol_drug_treat",
                "alcoholtreat_closing_date",
                "alcoholtreat_beds_lic",
-               "alcoholtreat_beds_staf",
-               "alcoholtreat_admissions",
                "alcoholtreat_patient_days",
-               "alcoholtreat_bed_days_avail",
                "alcoholtreat_beds_lic_vs_staf",
                "alcohol_drug_treat_adm_vs_pat_days",
                "comprehensive_rehab",
                "comprehensive_rehab_beds_lic",
-               "Comprehensive_rehab_beds_staf",
-               "Comprehensive_rehab_admissions",
                "Comprehensive_rehab_patient_days",
-               "Comprehensive_rehab_bed_days_avail",
                "comprehensive_rehab_beds_lic_vs_staf",
-               "comprehensive_rehab_adm_vs_pat_days",
                "psych_0to17",
                "psych_0to17_beds_lic",
-               "psych_0to17_beds_staf",
-               "psych_0to17_admissions",
                "psych_0to17_patient_days",
-               "psych_0to17_bed_days_avail",
                "psych_0to17_beds_lic_vs_staf",
                "psych_over17",
-               "psych_over17_closing_date",
                "psych_over17_beds_lic",
-               "psych_over17_beds_staf",
-               "psych_over17_admissions",
                "psych_over17_patient_days",
-               "psych_over17_bed_days_avail",
-               "psych_over17_bed_days_avail_check",
-               "psych_over17_patient_days_check",
                "psych_over17_beds_lic_vs_staf",
                "detox",
                "clinpsyc",
@@ -170,20 +154,20 @@ df_merged <- df ## Save state
 # Only Keep relevant columns for predicting county suicide rate 
 ## Only select columns that actually exist in the raw data
 selected_cols <- selected_cols[!selected_cols %in% c("facility_county", "CountyState")]
-selected_cols <- c(selected_cols,"Obs_Count") # , "Population" )
+selected_cols <- c(selected_cols,"Obs_Count")
 selected_cols <- selected_cols[!selected_cols %in% setdiff(selected_cols, names(df)) ]
 df <- subset(df, select = selected_cols )
 
-####
+
 ####
 #
 # Clean Up Values
 #
+####
 df <- df %>% rename(target = Obs_Count)
 
 Cols2Numeric <- c(
-  "target" #,
-#  "Population"
+  "target"
 )
 # Remove formatting from character strings like commas or currency symbols
 df <- df %>%
@@ -226,23 +210,51 @@ df$clinic_psychiatric <- as.integer(factor(df_merged$clinic_psychiatric))
 #| label: ReviewData
 #| echo: true
 #| message: true
+#| warning: false
 #| fig-width: 10
 #| fig-height: 10
 
-summary(df)
+##
+## Visualize target values 
+##
 
+# Histogram of target values
+target_density <- density(df$target)
+
+# Convert the density estimate to a function
+dens_func <- approxfun(target_density$x, target_density$y)
+
+# Use optimize() to find the minimum in a specified interval (choose based on your data)
+result <- optimize(dens_func, interval = c(min(df$target), max(df$target)))
+local_min_x <- result$minimum     # The x value where local minimum occurs
+local_min_y <- result$objective   # The minimum density value
+
+#  Create density plot with ggplot2 and add vertical line at minimum
+df_density <- data.frame(x = df$target)
+ggplot(df_density, aes(x = df$target)) +
+  geom_density(fill = "lightblue", color = "blue", alpha = 0.5) +
+  geom_vline(xintercept = local_min_x , color = "red", linetype = "dashed", size = 1) +
+  annotate("text", x = local_min_x, y = local_min_y + 0.002, 
+    label = sprintf("Min: %.0f", local_min_x), color = "red", angle = 90, vjust = -1, size = 6) +
+  labs(title = "Density plot of County Observed Suicide rates in PA", x = "County Suicide Rate per 100,000", y = "Density") +
+  coord_cartesian(ylim = c(0, 0.01)) 
+
+target_bin_cutoff <- local_min_x 
+
+
+##
+## Visualize ALL data across target values
 ## Normalized Scatter
-minMax <- function(x) {
-  (x - min(x)) / (max(x) - min(x))
-}
+##
+minMax <- function(x) { (x - min(x)) / (max(x) - min(x))}
 df_norm <- as.data.frame(lapply(df, minMax))
-
 df_long <- pivot_longer(df_norm, cols = -target, names_to = "variable", values_to = "value")
 ggplot(df_long, aes(x = target, y = value, color = variable)) +
-  geom_point(size=2) +
+  geom_point(size = 2) +
   theme_minimal() +
   theme(legend.position = "bottom") +
-  guides(color = guide_legend(nrow = 6))
+  guides(color = guide_legend(nrow = 7, title = "Feature")) +
+  labs(x = "", y = "", color = "Feature")
 
 ```
 
@@ -254,6 +266,7 @@ Evaluate Correlation Matrix
 #| label: CorrelationMatrix
 #| echo: true
 #| message: true
+#| warning: false
 #| fig-width: 8
 #| fig-height: 10
 
@@ -261,12 +274,14 @@ Evaluate Correlation Matrix
 df_cor <- df
 
 cor_mat <- cor(df)
-cor_threshold <- 0.2
+cor_threshold <- 0.0
 cor_threshold_count <- 2
 
 cols_above_threshold <- which( colSums(abs(cor_mat) > cor_threshold, na.rm = TRUE) >= cor_threshold_count)
 df <- subset(df, select = colnames(cor_mat)[cols_above_threshold] )
 cor_mat <- cor(df)
+
+cat(colnames(cor_mat)[cols_above_threshold])
 
 cor_mat_plot <- round(cor_mat, 2)
 cor_mat_plot[is.na(cor_mat_plot)] <- 0 # Replace all NA values with zero
@@ -290,6 +305,7 @@ Bake off by R squared
 
 ```{r}
 #| label: LinearRegressionSingePredictorBakeOff
+#| warning: false
 #| echo: true
 #| message: true
 
@@ -313,6 +329,7 @@ for (predictor in predictors) {
 }
 
 cat("Best single-predictor model uses:", best_predictor, "with R^2 =", best_r2, "\n")
+
 # To view details of best_model:
 summary(best_model)
 
@@ -324,6 +341,7 @@ summary(best_model)
 
 ```{r}
 #| label: StepwiseRegression
+#| warning: false
 #| echo: true
 #| message: true
 
@@ -352,23 +370,48 @@ Specifically, after using as.factor(Gender), 1 will become 0 and 2 will become 1
 
 ```{r}
 #| label: LogisticRegression
+#| warning: false
 #| echo: true
 #| message: true
 
-logreg_ch <- glm(target ~ children_hospital, data=df, family="gaussian")
+# Update target to be binomial
+df$target <- ifelse(df$target < target_bin_cutoff, 0, 1)
+
+# Logistic Regression with ONLY discharges1864
+logreg_ch <- glm(target ~ discharges1864, data=df, family="binomial")
 summary(logreg_ch)
 
-logreg_chdisch <- glm(target ~ children_hospital  + discharges1864 + psych_over17
-             + psych_over17_beds_lic, data=df, family="gaussian")
+# Logistic Regression with discharges1864 + 
+#  children_hospital + psych_over17  + psych_over17_beds_lic
+logreg_chdisch <- glm(target ~ discharges1864  +  children_hospital + psych_over17
+             + psych_over17_beds_lic, data=df, family="binomial")
 summary(logreg_chdisch)
 
 
 logreg <- logreg_chdisch
-coef(logreg)
-exp(coef(logreg))
-coeftable<-data.frame(col1=coef(logreg),col2=exp(coef(logreg)))
+coeftable <- data.frame(col1=coef(logreg),col2=exp(coef(logreg)))
 colnames(coeftable)<-c('Coefficient (log-odds)','e^coefficient (odds)')
 coeftable
+
+#
+# Confusion Matrix
+#
+df$PredLogOdds <- df$PredProbs <- predict(logreg, newdata=df)
+df$PredProbs <- predict(logreg, newdata=df, type="response")  
+# type="response" gives the probability
+summary(df$PredProbs)
+
+
+
+# transform prediction into either 1 (Elevated Suicide Rate) or 0 (Suicide Rate) using a cutoff point
+for (cutoff in c(0.25, 0.15, 0.1, 0.05))
+{
+  df$PredHighSuicide <- ifelse(df$PredProbs >= cutoff,1,0)
+  summary(df$PredHighSuicide)
+  cat(paste("For a cutoff point of", 
+    cutoff, "the proportion of Counties predicted to have high suicide rates is", 
+    round(mean(df$PredHighSuicide),2)), "\n\n")
+}
 
 ```
 
