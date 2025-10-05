@@ -1,0 +1,371 @@
+---
+title: "Regression Trees with 2009 Current Population Survey (CPS)"
+format: docx
+editor: visual
+---
+
+## Loading packages
+
+Lets start by calling some libraries that are useful for building and visualizing trees:
+
+-   [rpart](https://cran.r-project.org/web/packages/rpart/rpart.pdf)
+-   [rpart.plot](https://cran.r-project.org/web/packages/rpart.plot/rpart.plot.pdf)
+
+```{r}
+
+#After installing comment the install.packages commands
+#install.packages("rpart")
+#install.packages("rpart.plot")
+#install.packages("tidyverse")
+#install.packages("patchwork")
+#install.packages("corrplot")
+#
+# Load them
+library(rpart)
+library(rpart.plot)
+#And our usual packages
+library(tidyverse)
+library(patchwork)
+library(corrplot)
+```
+
+## Importing data
+
+We are using [cps09mar dataset](https://www.ssc.wisc.edu/~bhansen/econometrics/cps09mar_description.pdf), you can find the description on the link.
+
+```{r}
+#read.csv will read the csv into a dataframe df, which we can manipulate in R.
+df = read.csv("cps09mar.csv", stringsAsFactors = TRUE)
+str(df)
+summary(df)
+```
+
+Note how all variables are integers.
+
+cps09mar is a 2009 Current Population Survey (CPS), holding data of 50742 US household about several labor force characteristics, restricted to those who worked at least 36 hours per week for at least 48 weeks the past year; excluding military.
+
+Our key dependent variable is earnings (total annual wage and salary earnings in dollars). Most variables are self-explanatory, can look at the documentation for more details.
+
+We would prefer to have our dependent variable first, so lets [relocate](https://dplyr.tidyverse.org/reference/relocate.html) it.
+
+```{r}
+#Move earnings to the front: 
+df<-df%>%relocate(earnings)
+head(df)
+```
+
+## Preliminary Analysis
+
+Let's begin as before with evaluating the Correlation Matrix (see questions after code block).
+
+```{r}
+#Make and display a correlation matrix:
+cormat <- round(cor(df),2)
+head(cormat)
+
+#corrplot(cormat)
+corrplot(cormat, type="upper",diag=FALSE, tl.cex=1.2)
+#corrplot(cormat, method="number", type="upper",diag=FALSE, tl.cex=1.2)
+#
+# comment out the ones you don't want
+#
+```
+
+What are the most influential variables with regard to earnings?
+
+*Age, Female, Hispanic, Education, Hours, Marital.*
+
+***But, how do we interpret the Martial correlation?***
+
+### Please note:
+
+-   correlation is less of a worry in Regression Trees. The method "takes care of it"; if one variable is picked at some point to make a split and the other (highly correlated) variable does not add any useful additional information, then it will just not be used for a split later.
+-   We prefer to take a log of the dependent variable (and work with it instead) if the original dependent variable is too skewed. Therefore, you should remember to check the histogram of the dependent variable:
+
+```{r}
+
+#Make a new histogram zooming in to the most frequent values: 
+
+g1<-ggplot(df)+aes(x=earnings)+geom_histogram(fill="blue", colour="black", stat="bin", binwidth=10000)+scale_x_continuous(breaks=seq(0,600000,50000), lim=c(0,600000))+ggtitle("Complete histogram for earnings")+theme(plot.title = element_text(hjust = 0.5))
+
+g2<-ggplot(df)+aes(x=earnings)+geom_histogram(fill="blue", colour="black", stat="bin", binwidth=10000)+scale_x_continuous(breaks=seq(0,150000,15000), lim=c(0,150000))+ggtitle("Histogram between 0 and $150k")+theme(plot.title = element_text(hjust = 0.5))
+
+g1/g2
+```
+
+As suspected, the distribution is not very normal. We can get better predictions by taking log of earnings.
+
+```{r}
+
+df$earnings[1]
+log(df$earnings[1])
+#Get logearnings for the entire dataset 
+
+df$logearnings<-log(df$earnings)
+summary(df$logearnings)
+
+#For reference: 
+log(25000)
+log(50000)
+log(100000)
+log(150000)
+log(200000)
+log(250000)
+log(400000)
+log(500000)
+
+```
+
+```{r}
+#get a new histogram zooming to the most frequent values
+
+g1<-ggplot(df)+aes(x=logearnings)+geom_histogram(fill="blue", colour="black", stat="bin", binwidth=0.25)+scale_x_continuous(breaks=seq(0,14,1), lim=c(0,14))+ggtitle("Complete histogram for earnings")+theme(plot.title = element_text(hjust = 0.5))
+g2<-ggplot(df)+aes(x=logearnings)+geom_histogram(fill="blue", colour="black", stat="bin", binwidth=0.25)+scale_x_continuous(breaks=seq(7,14,1), lim=c(7,14))+ggtitle("Complete histogram for earnings")+theme(plot.title = element_text(hjust = 0.5))
+g1
+g2
+```
+
+## Splitting Dataset into training and test
+
+We will leave 80% of observations in the training set and 20% in the test set.
+
+```{r}
+#set.seed just keeps results random but constant for all using the same seed (so we all will have the same results)
+set.seed(1760, sample.kind = "Rejection")
+spl = sample(nrow(df),0.8*nrow(df))
+head(spl)
+
+
+# Now lets split our dataset into train and test:
+train.df = df[spl,]
+test.df = df[-spl,]
+dim(df)
+dim(train.df)
+dim(test.df)
+```
+
+## Making our first regression trees
+
+In order to build a regression tree, we use the function "rpart", as follows:
+
+**rpart (formula, data, method="anova", minbucket, cp)**
+
+Here are some [notes](https://www.rdocumentation.org/packages/rpart/versions/4.1.16/topics/rpart) and if method is missing, R tries to make an intelligent guess.
+
+```{r}
+# rpart (formula, data, method="anova", minbucket, cp)
+# lm(formula, data)
+rpart(earnings~ female, data=train.df)
+```
+
+We could compare the leaf values to the means for female or male:
+
+```{r}
+(train.df%>%filter(female==1))$earnings%>%mean()
+(train.df%>%filter(female==0))$earnings%>%mean()
+
+```
+
+This is all numeric. Let's have a depiction of the tree using rpart.plot()
+
+Regression Tree with female and hispanic
+
+```{r}
+tree1<-rpart(earnings~ female, data=train.df)
+rpart.plot(tree1,digits=-2,extra=1)   # check out ?rpart.plot for switch info
+
+tree2<-rpart(earnings~ hisp, data=train.df)
+rpart.plot(tree2,digits=-2,extra=101)   # note the 101
+
+tree3<-rpart(earnings~ female+hisp, data=train.df)
+rpart.plot(tree3,digits=-2,extra=101)
+
+
+# How small could it go?  
+# Try small values for minbucket=10 and cp=0.00000001 to tree3.  
+#    Why did it stop?  
+
+# add age, so earnings~ female+hisp+age with default minbucket and cp
+#    then try minbucket=10 and cp=0.00000001 - thoughts?  cp = 0.001?
+
+```
+
+Regression Tree with all the variables
+
+```{r}
+tree4<-rpart(earnings~ ., data=train.df)
+rpart.plot(tree4,digits=-2,extra=101)   # try digits = -4
+
+tree5<-rpart(earnings~ .-logearnings, data=train.df)  # to remove logearinings
+rpart.plot(tree5,digits=-2,extra=101)
+
+# check out the rpart.plot and prp parameters, 
+#   such as nn=TRUE and box.palette="Red")
+
+```
+
+Yes, be sure the output is not part of the input! (e.g., earnings and logearnings)
+
+Although the results are there, they don't look nice. We can print a better tree using "prp":
+
+```{r}
+#Try adding negative digits to get results without scientific notation
+prp(tree1,digits=-3)
+prp(tree3,digits=-3)
+prp(tree5,digits=-3)
+```
+
+Let's see how the log earnings work out:
+
+```{r}
+ftreelog<-rpart(logearnings ~ female, data=train.df)
+htreelog<-rpart(logearnings ~ hisp, data=train.df)
+
+prp(ftreelog,digits=5)
+
+#Check if it is the same value as using just earnings 
+exp(10.496)
+exp(10.786)
+```
+
+Lets go back to the more complete tree:
+
+```{r}
+names(df)
+
+#recall Which variable we cannot use? Use everything else. 
+
+basetree<-rpart(earnings ~ .-logearnings,data=train.df)
+
+prp(basetree,digits=-5)
+```
+
+This is actually a nice tree. rpart default control options can lead to quite a decent one. But, let's see what happens if we force it to allow more leaves:
+
+```{r}
+#try different cp values to get a bigger tree
+prp(rpart(earnings ~ .-logearnings,data=df, method="anova",minbucket=5,cp=0.0001),digits=-5)
+
+prp(rpart(earnings ~ .-logearnings,data=df, method="anova",minbucket=50,cp=0.001),digits=-5)
+
+prp(rpart(earnings ~ .-logearnings,data=df, method="anova",minbucket=50,cp=0.01),digits=-5)
+
+prp(rpart(earnings ~ .-logearnings,data=df, method="anova",minbucket=50,cp=0.01),digits=-5,extra=101)  
+
+# extra = 101 displays observations in each leaf and percentage
+```
+
+## Cross Validation
+
+```{r}
+set.seed(1760, sample.kind = "Rejection")
+
+#make a tree with a very small value of cp. Not 0 because it will take a long time creating too many splits
+
+tree_cv = rpart(earnings ~ .-logearnings,data=train.df, method="anova")
+rpart.plot(tree_cv,digits=-2,extra=101)
+
+
+tree_cv = rpart(earnings ~ .-logearnings,data=train.df, method="anova",minbucket=5000,cp=0.1)
+rpart.plot(tree_cv,digits=-2,extra=101)
+
+
+tree_cv = rpart(earnings ~ .-logearnings,data=train.df, method="anova",minbucket=5000,cp=0.01)
+rpart.plot(tree_cv,digits=-2,extra=101)
+
+
+tree_cv = rpart(earnings ~ .-logearnings,data=train.df, method="anova",minbucket=5000,cp=0.001)
+rpart.plot(tree_cv,digits=-2,extra=101)
+
+
+tree_cv = rpart(earnings ~ .-logearnings,data=train.df, method="anova",minbucket=50,cp=0.001)
+plotcp(tree_cv)
+#plotcp will give us the relative error in the y axis for a 10-fold cross validation of our dataset, telling us the size of the tree (leaves) and the corresponding cp.
+
+#The dotted line in the "plotcp" graph represents the minimum cross-validation error plus one standard deviation. One simple rule of thumb is to consider the maximum cp value (i.e., the first one from left to right) for which the x-val relative error falls under that line. This represents the simplest model (smallest tree) that gives us a cross-validation error that is statistically similar to the "best" tree.
+
+
+```
+
+We want to see:
+
+-   A tree of size 6 to see what if the model cp is too large (cp = 0.01)
+
+-   A tree of size 13 based on the ref. line, so we have to use cp of about 0.003
+
+-   A tree of size of \~ 24 (modeler chosen desired size), so we have to use cp 0.00125
+
+```{r}
+tree01 = rpart(earnings ~ .-logearnings,data=train.df, method="anova",minbucket=50,cp=0.01)
+rpart.plot(tree01,digits=-2,extra=101)
+
+treea = rpart(earnings ~ .-logearnings,data=train.df, method="anova",minbucket=50,cp=0.003)
+rpart.plot(treea,digits=-2,extra=101)
+
+treeb = rpart(earnings ~ .-logearnings,data=train.df, method="anova",minbucket=50,cp=0.00125)
+rpart.plot(treeb,digits=-2,extra=101)
+
+
+```
+
+Lets get predictions for both models:
+
+```{r}
+test.df$pred01 = predict(tree01, newdata= test.df)
+
+test.df$preda = predict(treea, newdata= test.df)
+
+test.df$predb = predict(treeb, newdata= test.df)
+
+head(test.df)%>%relocate(preda,predb, pred01)
+```
+
+Which model is better? To get out of sample R square:
+
+```{r}
+mean_train = mean(train.df$earnings)  #grab the mean for calc below
+
+# Then, we compute the sum of squared errors (SSE) using our tree:
+
+SSE01 = sum((test.df$earnings - test.df$pred01)^2)
+SSEa = sum((test.df$earnings - test.df$preda)^2)
+SSEb = sum((test.df$earnings - test.df$predb)^2)
+
+SSE01
+SSEa
+SSEb
+
+print(paste("Tree CP=0.01 has a SSE of", SSE01))
+print(paste("Tree A has a SSE of", SSEa))
+print(paste("Tree B has a SSE of", SSEb))
+
+# And the total sum of squared errors (SST) using our simple benchmark model
+# (the mean in the training set)
+
+SST = sum((test.df$earnings - mean_train)^2)
+
+# With that, we finally get
+
+OSR2.01 = 1 - SSE01/SST
+OSR2a = 1 - SSEa/SST
+OSR2b = 1 - SSEb/SST
+
+OSR2.01
+OSR2a
+OSR2b
+
+```
+
+Let's see the MAE for comparisons:
+
+```{r}
+MAE.01 = mean(abs(test.df$earnings - test.df$pred01))
+MAEa = mean(abs(test.df$earnings - test.df$preda))
+MAEb = mean(abs(test.df$earnings - test.df$predb))
+
+
+MAE.01
+MAEa
+MAEb
+
+```

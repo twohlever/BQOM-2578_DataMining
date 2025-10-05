@@ -1,5 +1,5 @@
 ---
-title: "Class "
+title: "Class 04 | Logistic Regression"
 subtitle: "BQOM 2578 | Data Mining"
 date: ", 2025" 
 author: "Theresa Wohlever"
