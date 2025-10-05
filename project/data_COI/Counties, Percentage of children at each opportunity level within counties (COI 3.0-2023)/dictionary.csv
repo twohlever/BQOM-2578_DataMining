@@ -1,0 +1,46 @@
+column,type,label
+state_fips,text,State FIPS code
+state_usps,text,State USPS code
+state_name,text,State name
+county_fips,text,County FIPS code
+county_name,text,County name
+group,text,Racial/ethnic group
+level,text,Opportunity level
+year,integer,Year of observation
+pop,integer,"Child population count, ages 0-17"
+c5_COI_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, Child Opportunity Index, nationally normed"
+c5_COI_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, Child Opportunity Index, state normed"
+c5_ED_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, education domain, nationally normed"
+c5_ED_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, education domain, state normed"
+c5_HE_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, health and environment domain, nationally normed"
+c5_HE_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, health and environment domain, state normed"
+c5_SE_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, social and economic domain, nationally normed"
+c5_SE_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, social and economic domain, state normed"
+c5_ED_EC_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, early childhood education subdomain, nationally normed"
+c5_ED_EC_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, early childhood education subdomain, state normed"
+c5_ED_EL_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, elementary education subdomain, nationally normed"
+c5_ED_EL_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, elementary education subdomain, state normed"
+c5_ED_ER_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, educational resources subdomain, nationally normed"
+c5_ED_ER_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, educational resources subdomain, state normed"
+c5_ED_SP_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, secondary and post-secondary education subdomain, nationally normed"
+c5_ED_SP_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, secondary and post-secondary education subdomain, state normed"
+c5_HE_EP_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, pollution subdomain, nationally normed"
+c5_HE_EP_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, pollution subdomain, state normed"
+c5_HE_HR_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, health resources subdomain, nationally normed"
+c5_HE_HR_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, health resources subdomain, state normed"
+c5_HE_SE_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, safety-related resources subdomain, nationally normed"
+c5_HE_SE_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, safety-related resources subdomain, state normed"
+c5_HE_HE_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, healthy environments subdomain, nationally normed"
+c5_HE_HE_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, healthy environments subdomain, state normed"
+c5_SE_EI_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, concentrated socio-economic inequity subdomain, nationally normed"
+c5_SE_EI_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, concentrated socio-economic inequity subdomain, state normed"
+c5_SE_EO_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, employment subdomain, nationally normed"
+c5_SE_EO_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, employment subdomain, state normed"
+c5_SE_ER_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, economic resources subdomain, nationally normed"
+c5_SE_ER_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, economic resources subdomain, state normed"
+c5_SE_HQ_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, housing resources subdomain, nationally normed"
+c5_SE_HQ_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, housing resources subdomain, state normed"
+c5_SE_SR_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, social resources subdomain, nationally normed"
+c5_SE_SR_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, social resources subdomain, state normed"
+c5_SE_WL_nat,double,"Percentage children residing in a census tract with a given Child Opportunity Level, wealth subdomain, nationally normed"
+c5_SE_WL_stt,double,"Percentage children residing in a census tract with a given Child Opportunity Level, wealth subdomain, state normed"
