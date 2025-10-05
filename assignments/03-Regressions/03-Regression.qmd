@@ -1,7 +1,7 @@
 ---
 title: "Assignment 03 Regressions "
 subtitle: "BQOM 2578 | Data Mining"
-date: "September 28, 2025"
+date: "10/5/2025"
 date-format: "full"
 author: "Theresa Wohlever"
 editor: source
@@ -18,27 +18,29 @@ format:
     pdf-engine: xelatex
 ---
 
-# Assignment Instructions
-
-https://canvas.pitt.edu/courses/324587/assignments/1871892
-
-Define and describe the purpose of your analysis in terms of the output and input variable(s) you are interested in understanding for your project and if each variable is categorical or continuous.
-
-Prepare your dataset for running the adequate regression.
-
-Run at least three regressions, at least one linear and one logistic.
-
-Decide how to present your final results; one model, several models? Which format? What graphs / visualizations would you use?
-
-In the last section, describe your final conclusions grounded on your regression analysis and visualizations.
-
 # Executive Summary
 
-For Each variable is it categorical or continuous? 3 regressions on data evaluate models
+How well can we predict county Suicide Rates from the hospital information on a per county basis within Pennsylvania? Combine both county Suicide rate data with all PA hospital data to address this question. Dependent Variable is the County Suicide rate.
+The Data preparation includes removing a large number of features expected to be unrelated to suicide rates, changing the representation of categorical variables to integers, and joining hospital data and county level suicide data.
+
+There are Linear regression models to predict county suicide rates. These include single feature models as well as stepwaise models. There are also Logistic regression models.
+
+Single Feature Linear Regression performed for every Independent Variable (Feature) selected as relevant for this analysis. Of those, the highest R^2 (best) single-predictor model uses the variable discharges1864 with R^2 = 0.06481609
+
+Of the three Stepwise Linear Regression models attempted, all three performed better than the Single Feature Models. Of these three, the backwards stepwise model predicted County Suicide Rates best with an Adjusted R-squared value of 0.1634. In all linear regression cases, these R^2 values are quite low; even though the explanatory power for the backwards stepwise linear regression is the best of all linear regression models, it can only explain 16% of the variance in county suicide rates.
+
+
+Logistic regression provides insight into the impact of included features. Selected features were those shown to demonstrate significant impact on the linear regression. Using these features in a Logistic Regression we can better percieve their impact on County Suicide Rates.
+
+1. `children_hospital`: Very large effect (β = 2.849)
+2. `psych_over17`: Small effect, but not significant (β = 0.184)
+3. `discharges1864`: Very small but significant effect (β = 0.0001)
+4. `psych_over17_beds_lic`: Negligible effect (β = 0.001)
+
+These findings are discussed in detail in [Logistic Regression Model 2 (Multi-Variable) : Beta Coefficients Discussion](#logistic-model-discussion).
+
 
 # Data Preparation
-
-## Loading packages
 
 ```{r}
 #| label: LoadPackages
@@ -54,6 +56,7 @@ rm(list = ls())
 # library(ROCR)
 # library(caret)
 library(tidyverse)
+library("tidyr") #pivot_longer funciton
 library(corrplot)
 library(tidyverse)
 # library("lm.beta")
@@ -71,7 +74,7 @@ CSV_S_OUT_FILE <- paste(working_directory, "/", CSV_S_base_filename, "_processed
 
 ```
 
-## Importing data
+## Importing Data, Cleaning, & Wrangling
 
 ```{r}
 #| label: ImportData
@@ -93,7 +96,6 @@ summary(raw_s_df)
 
 ```
 
-## Data Cleaning & Wrangling
 
 ```{r}
 #| label: CreateTarget
@@ -110,7 +112,7 @@ selected_cols <- c("facility_id",
                "privateroomexist",
                "semiprivateroomexist",
                "discharges1864",
-               "dischargestotal",
+               # "dischargestotal",
                "alcohol_drug_detox",
                "alcoholdetox_patient_days",
                "alcoholdetox_beds_lic_vs_staf",
@@ -136,8 +138,8 @@ selected_cols <- c("facility_id",
                "detox",
                "clinpsyc",
                "clinic_psychiatric",
-               "psychiatrists",
-               "ft_staff"
+               "psychiatrists"# ,
+               # "ft_staff"
                )
 # Keep only columns related to model 
 ## Only select columns that actually exist in the raw data
@@ -206,6 +208,12 @@ df$clinic_psychiatric <- as.integer(factor(df_merged$clinic_psychiatric))
 
 ```
 
+### Data Review
+
+Numeric variables are continuous.
+
+Integer variables are categorical.
+
 ```{r}
 #| label: ReviewData
 #| echo: true
@@ -213,6 +221,16 @@ df$clinic_psychiatric <- as.integer(factor(df_merged$clinic_psychiatric))
 #| warning: false
 #| fig-width: 10
 #| fig-height: 10
+
+##
+## Variable TYPES
+##
+
+# sapply(df, typeof)
+sapply(df, class)
+
+
+
 
 ##
 ## Visualize target values 
@@ -239,8 +257,22 @@ ggplot(df_density, aes(x = df$target)) +
   labs(title = "Density plot of County Observed Suicide rates in PA", x = "County Suicide Rate per 100,000", y = "Density") +
   coord_cartesian(ylim = c(0, 0.01)) 
 
+
+## Make TARGET binary for logistic regression
 target_bin_cutoff <- local_min_x 
 
+```
+
+Set the cut-off value for 1 or 0 (binary) for Logistic regression is the local minimum of county Suicide Rates.
+
+
+```{r}
+#| label: VisualizeAllVariables
+#| echo: true
+#| message: true
+#| warning: false
+#| fig-width: 10
+#| fig-height: 10
 
 ##
 ## Visualize ALL data across target values
@@ -258,6 +290,8 @@ ggplot(df_long, aes(x = target, y = value, color = variable)) +
 
 ```
 
+No clear clustering patterns across all variables vs. County Suicide Rates (Regression Target).
+
 ## Preliminary Analysis
 
 Evaluate Correlation Matrix
@@ -274,14 +308,14 @@ Evaluate Correlation Matrix
 df_cor <- df
 
 cor_mat <- cor(df)
-cor_threshold <- 0.0
+cor_threshold <- 0
 cor_threshold_count <- 2
 
 cols_above_threshold <- which( colSums(abs(cor_mat) > cor_threshold, na.rm = TRUE) >= cor_threshold_count)
 df <- subset(df, select = colnames(cor_mat)[cols_above_threshold] )
 cor_mat <- cor(df)
 
-cat(colnames(cor_mat)[cols_above_threshold])
+cat(paste(colnames(cor_mat)[cols_above_threshold], collapse = "\n"))
 
 cor_mat_plot <- round(cor_mat, 2)
 cor_mat_plot[is.na(cor_mat_plot)] <- 0 # Replace all NA values with zero
@@ -360,13 +394,9 @@ summary(step_model_forward)
 
 ```
 
+
+
 ## Logistic Regression
-
-Formula is very simple: glm(y \~ X, family="binomial").
-
-For variables that we want to treat as factors (categorical variables) we use as.factor. R will change it to a dummy, taking the lowest value as 0.
-
-Specifically, after using as.factor(Gender), 1 will become 0 and 2 will become 1.
 
 ```{r}
 #| label: LogisticRegression
@@ -414,6 +444,134 @@ for (cutoff in c(0.25, 0.15, 0.1, 0.05))
 }
 
 ```
+
+
+
+
+Of the two Logistic Regression models, **Model 2 (Multi-Variable)** demonstrates superior statistical and explanatory power.
+
+### Logistic Regression Model Comparison
+
+| Metric | Model 1 (Single Variable) | Model 2 (Multi-Variable) |
+|--------|---------------------------|--------------------------|
+| **Variables** | discharges1864 only | discharges1864 + children_hospital + psych_over17 + psych_over17_beds_lic |
+| **AIC** | 225.17 | 216.84 |
+| **Deviance Explained** | 3.77% | 10.00% |
+| **Significant Predictors** | 1 out of 1 | 2 out of 4 |
+| **Residual Deviance** | 221.17 | 206.84 |
+
+### Model 2 (Multi-Variable) Demonstrates Superior Statistical Power
+
+#### Lower AIC Score
+Model 2 achieves an AIC of 216.84 compared to Model 1's 225.17, representing an **8.33-point improvement**. The AIC penalizes model complexity while rewarding goodness of fit, so this reduction indicates that the additional variables provide meaningful explanatory value that outweighs their complexity cost.
+
+#### Greater Deviance Explained
+Model 2 explains **10.00% of the deviance** compared to Model 1's 3.77%. This represents a **2.65-fold increase** in explanatory power, indicating that the multi-variable model captures significantly more variance in county suicide rates.
+
+#### Stronger Statistical Significance
+Model 2 includes two highly significant predictors (p < 0.001):
+- **discharges1864**: z = 3.404, p = 0.000663
+- **children_hospital**: z = 3.356, p = 0.000790
+
+The children_hospital variable emerges as particularly powerful with an **odds ratio of 17.27**, meaning counties with children's hospitals have over 17 times higher odds of being classified as high suicide rate counties.
+
+
+#### Model 2's Key Strengths
+
+##### Clinical Relevance
+The model incorporates healthcare infrastructure variables that have logical connections to suicide rates:
+- Hospital discharge volume (discharges1864) reflects overall healthcare capacity
+- Children's hospital presence may indicate regional healthcare centralization
+- Psychiatric services availability directly relates to mental health resources
+
+
+### Limitations and Considerations
+#### Overall Predictive Capacity
+Both models show *relatively low explanatory power* overall. Even the superior Model 2 only explains 10% of the deviance in suicide rates, indicating that:
+- Hospital infrastructure variables alone are insufficient predictors
+- Suicide rates are influenced by complex socioeconomic, demographic, and environmental factors not captured in this dataset
+- Additional variables (unemployment rates, population density, mental health resources) might improve model performance
+
+#### **Binary Classification Performance**
+The confusion matrix analysis reveals classification challenges across different probability cutoffs:
+- At 0.25 cutoff: 18% of counties predicted as high suicide rate
+- At 0.15 cutoff: 83% of counties predicted as high suicide rate
+- This suggests the model has limited practical utility for classification
+
+### Logistic Regression Models Comparison: Conclusion
+
+**Model 2 (Multi-Variable) demonstrates the strongest statistical and explanatory power** due to its:
+- Significantly lower AIC score (8.33-point improvement)
+- Higher deviance explained (10.00% vs 3.77%)
+- Multiple significant predictors with meaningful effect sizes
+- Better model fit while maintaining reasonable complexity
+
+However, both models reveal the **fundamental challenge** of predicting county suicide rates from hospital infrastructure data alone. The low overall explanatory power suggests that effective suicide rate prediction requires incorporating broader socioeconomic, demographic, and mental health resource variables beyond hospital characteristics. The children_hospital variable emerges as the most powerful single predictor, with its massive odds ratio of 17.27 suggesting that healthcare centralization patterns may serve as important indicators of regional suicide risk patterns.
+
+
+
+
+
+# Logistic Regression Model 2 (Multi-Variable) : Beta Coefficients Discussion {#logistic-model-discussion}
+
+The beta coefficients (β) in logistic regression Model 2 represent the **change in log-odds of the outcome** (high suicide rate classification) for each one-unit increase in the predictor variable, holding all other variables constant.
+
+## Statistical Significance Assessment
+### Significant Predictors (p < 0.001)
+#### children_hospital (Beta = 2.849)
+- **Z-score**: 3.356, **p-value**: 0.000790
+- **95% Confidence Interval**: [1.185, 4.513]
+- **Interpretation**: This is the **strongest predictor** in the model with a very large effect size. Counties with children's hospitals have **17.27 times higher odds** of being classified as high suicide rate counties
+- **Practical Significance**: The large beta coefficient suggests children's hospitals may serve as markers for healthcare centralization in counties with higher population density or urban characteristics
+
+#### discharges1864 (Beta = 0.0001180)
+- **Z-score**: 3.404, **p-value**: 0.000663
+- **95% Confidence Interval**: [0.000050, 0.000186]
+- **Interpretation**: Though the coefficient appears small, it's highly statistically significant. Each additional hospital discharge increases the odds by a factor of 1.0001
+- **Practical Significance**: The cumulative effect becomes meaningful given the large range of discharge volumes across counties
+
+### Non-Significant Predictors (p > 0.05)
+
+####  psych_over17 (Beta = 0.1836)
+- **Z-score**: 0.837, **p-value**: 0.403
+- **95% Confidence Interval**: [-0.246, 0.614] (includes zero)
+- **Interpretation**: Despite having a reasonable effect size (OR = 1.20), this variable lacks statistical significance, suggesting **no reliable relationship** with suicide rates
+
+####  psych_over17_beds_lic (Beta = 0.001335)
+- **Z-score**: 0.338, **p-value**: 0.735
+- **95% Confidence Interval**: [-0.006, 0.009] (includes zero)
+- **Interpretation**: This variable shows **no meaningful effect** (OR ≈ 1.00) and is clearly non-significant
+
+## Key Insights
+
+### Model Reliability
+- **Two out of four predictors** are statistically significant, indicating the model has some predictive validity but also contains potentially redundant variables
+- The **large standard errors** for non-significant variables (0.219 and 0.004 respectively) relative to their coefficients suggest these relationships are unstable
+
+### Effect Size Hierarchy
+1. `children_hospital`: Very large effect (β = 2.849)
+2. `psych_over17`: Small effect, but not significant (β = 0.184)
+3. `discharges1864`: Very small but significant effect (β = 0.0001)
+4. `psych_over17_beds_lic`: Negligible effect (β = 0.001)
+
+### Confidence Intervals
+The **95% confidence intervals** reveal critical information about coefficient reliability:
+- **Significant variables**: Confidence intervals exclude zero, confirming reliability
+- **Non-significant variables**: Confidence intervals include zero, indicating the true effect could be null
+
+## Practical Implications
+
+### Model Parsimony Considerations
+The presence of two non-significant variables suggests the model could be **simplified** by removing `psych_over17` and `psych_over17_beds_lic` without meaningful loss of predictive power. This would likely:
+- Reduce model complexity
+- Improve interpretability
+- Potentially improve AIC score further
+
+### Clinical and Policy Relevance
+The **highly significant `children_hospital` coefficient** (β = 2.849) indicates that healthcare infrastructure patterns, particularly pediatric care centralization, may serve as important **proxy indicators** for broader county characteristics that influence suicide rates. This finding warrants further investigation into the underlying mechanisms connecting pediatric healthcare access and community mental health outcomes.
+
+The significant but small **`discharges1864` coefficient** suggests that overall hospital utilization patterns provide incremental predictive value, potentially reflecting broader healthcare access or community health status differences across counties.
+
 
 # References
 
