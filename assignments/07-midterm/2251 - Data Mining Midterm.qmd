@@ -1,0 +1,284 @@
+---
+title: "2251 Midterm"
+subtitle: "BQOM 2578 | Data Mining"
+date: "10/9/2025"
+date-format: "full"
+author: "Theresa Wohlever"
+editor: source
+format:
+  pdf:
+    toc: true
+    toc-depth: 2
+    number-sections: false
+    mainfont: "Georgia"
+    sansfont: "Avenir"
+    monofont: "Menlo"
+    monofontoptions: "Scale=0.6"
+    mathfont: "STIX Two Math"
+    pdf-engine: xelatex
+---
+
+## Libraries
+
+```{r}
+
+rm(list = ls())
+#Loading some neccesary libraries
+#Add any missing ones as you need them!
+library(tidyverse)
+
+```
+
+
+## 2. Exploration
+
+get a sense of the data.
+
+```{r}
+
+df<-read.csv("driverschurn.csv")
+str(df)
+summary(df)
+
+unique(df$STATUS)
+table(df$STATUS)
+
+unique(df$GENDER)
+table(df$GENDER)
+
+unique(df$CHILDREN)
+table(df$CHILDREN)
+
+```
+
+Next, to prepare his dataset, split it between training and testing dataset:
+
+```{r}
+set.seed(1013, sample.kind = "Rejection")
+
+#split the dataset leaving 80% of observations in the training dataset and 20% in the test dataset:
+spl = sample(nrow(df),0.8*nrow(df))
+head(spl)
+
+
+# Now lets split our dataset into train and test:
+
+train.df = df[spl,]
+test.df = df[-spl,]
+
+```
+
+## 3. Modeling
+
+After that, John Knowsall decided to run a linear regression to test if expected and actual salary played a role. He decided a clever way to do so would be to start with actual salary, which surely would play a role. Then, he added expected salary. Finally, he added the demographic control variables.
+
+```{r}
+m1<-lm(CHURN~ACTSAL,data=train.df)
+summary(m1)
+
+
+m2<-lm(CHURN~ACTSAL+EXPSAL,data=train.df)
+summary(m2)
+
+m3<-lm(CHURN~.,data=train.df)
+summary(m3)
+
+```
+
+## 4. Presenting
+
+Although John liked his model's results, he knew that this is not the proper way to present them. So, he made a nice looking table:
+
+```{r}
+#| echo: true
+#| message: true
+#| 
+library(jtools)
+library(sjPlot)
+
+	
+# Generate the table using tab_model()
+#transform
+model_table <- tab_model(m1, m2, m3,dv.labels = c("(1):", "(2)","(3)"),show.ci=FALSE,collapse.se=TRUE, p.threshold = c(0.1, 0.05, 0.01,0.001),p.style = "stars",
+  string.se = "std. Error",
+  string.p = "p-value",transform=NULL,digits=6)
+
+
+# Print the table
+model_table
+
+
+```
+
+
+## 5. 2nd modeling attempt
+
+```{r}
+#| echo: true
+#| message: true
+#| 
+library(rpart)
+library(rpart.plot)
+tree<-rpart(CHURN ~ ., data=train.df, method="anova")
+rpart.plot(tree,digits=-2)
+```
+
+
+
+# CANVAS EXAM
+## Question 5: Classification Tree
+```{r}
+#| echo: true
+#| message: true
+
+
+library(rpart)
+library(rpart.plot)
+library(tidyverse)
+library(caTools)
+library(ROCR)
+library(caret)
+library(corrplot)
+
+library("lm.beta")
+
+
+tree<-rpart(CHURN ~ ., data=df, method="class",cp=0.0005)
+prp(tree)
+
+rpart.plot(tree,digits=-2)
+plotcp(tree)
+
+tree_cp036 = rpart(CHURN ~ .,df, method="class",cp= 0.036 )
+rpart.plot(tree_cp036 ,digits=-2)
+plotcp(tree_cp036)
+
+
+
+
+```
+
+
+## Question 6: Confusion Matrix
+```{r}
+#| echo: true
+#| message: true
+
+
+df_pred <- df
+df_pred$pred = predict(tree_cp036, newdata = df, type="class")
+confusionMatrix(df_pred$pred,as.factor(df_pred$CHURN), positive="1")
+
+
+```
+
+
+
+## Question 7: Logistic Regression
+```{r}
+#| echo: true
+#| message: true
+
+logreg <- glm(CHURN ~ ., data=df, family="binomial")
+summary(logreg)
+
+df_logreg <- df
+df_logreg$pred <- predict(logreg, newdata = df, type="response")
+summary(df_logreg$pred)
+
+
+# Calculate the exp(coefficient) 
+coeftable <- data.frame(col1=coef(logreg),col2=exp(coef(logreg)))
+colnames(coeftable)<-c('Coefficient (log-odds)','e^coefficient (odds)')
+coeftable
+
+```
+
+
+
+
+
+
+
+## Question 8: Logistic Regression Cutoff 0.5
+```{r}
+#| echo: true
+#| message: true
+cutoff <- 0.50
+levels <- c("0", "1")
+## Using Cut Off value for prediction
+
+# Convert predicted probabilities to predicted classes using a threshold (e.g., 0.5)
+df_logreg$pred_class <- factor(ifelse(df_logreg$pred > cutoff, "1", "0"), levels = levels )
+
+# Ensure the reference vector is a factor with the same levels
+df_logreg$CHURN <- factor(df_logreg$CHURN, levels = levels )
+
+# create the confusion matrix
+conmat <- caret::confusionMatrix(df_logreg$pred_class, df_logreg$CHURN, positive = "1")
+conmat
+
+
+
+
+```
+
+
+
+
+## Question 9: Logistic Regression Cutoff Update
+```{r}
+#| echo: true
+#| message: true
+
+
+
+roc.pred = prediction(df_logreg$pred, df_logreg$CHURN)
+perf = performance(roc.pred, "tpr", "fpr")
+
+plot(perf,                      # the data
+     main = "ROC Curve for 0.5 Cutoff",        # the chart's title
+     xlab = "1 - Specificity",  # the name of the x-axis
+     ylab = "Sensitivity",      # the name of the y-axis
+     colorize=TRUE)             # add color to curve depending on threshold prob.
+
+abline(0,1) # adds line at intercept 0, with slope 1
+perf_auc = performance(roc.pred, "auc")
+as.numeric(perf_auc@y.values)
+
+
+##
+## CONFUSION MATRIX
+##
+cutoff <- 0.35
+levels <- c("0", "1")
+## Using Cut Off value for prediction
+
+# Convert predicted probabilities to predicted classes using a threshold (e.g., 0.5)
+df_logreg$pred_class <- factor(ifelse(df_logreg$pred > cutoff, "1", "0"), levels = levels )
+# Ensure the reference vector is a factor with the same levels
+df_logreg$CHURN <- factor(df_logreg$CHURN, levels = levels )
+# create the confusion matrix
+conmat <- caret::confusionMatrix(df_logreg$pred_class, df_logreg$CHURN, positive = "1")
+conmat
+
+
+
+roc.pred = prediction(df_logreg$pred, df_logreg$CHURN)
+perf = performance(roc.pred, "tpr", "fpr")
+
+plot(perf,                      # the data
+     main = "ROC Curve for updated Cutoff",        # the chart's title
+     xlab = "1 - Specificity",  # the name of the x-axis
+     ylab = "Sensitivity",      # the name of the y-axis
+     colorize=TRUE)             # add color to curve depending on threshold prob.
+
+abline(0,1) # adds line at intercept 0, with slope 1
+perf_auc = performance(roc.pred, "auc")
+as.numeric(perf_auc@y.values)
+
+
+
+
+
+```

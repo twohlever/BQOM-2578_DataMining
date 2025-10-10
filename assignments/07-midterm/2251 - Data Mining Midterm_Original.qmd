@@ -1,0 +1,119 @@
+---
+title: "2251 Midterm for Data Mining"
+format: docx
+editor: visual
+---
+
+## Libraries
+
+```{r}
+#Loading some neccesary libraries
+#Add any missing ones as you need them!
+library(tidyverse)
+
+```
+
+## 1. Motivation
+
+You are back on the team with John Knowsall and Sandy Skeptic at the case competition, and you made it to the next round - congrats!!
+
+Now your team is given data from a a ride-sharing platform company (like Uber, Lyft, etc.) and this situation:
+
+***Recently, a major problem at the firm has been that drivers are churning too much. A concern was that maybe salaries were not high enough. Salaries in the platform depend on the hours drivers put in the platform, market rates, etc.; and although they were in a competitive environment if they no longer reflected market conditions, they ought to be changed. In addition, a manager in HR has talked to two or three drivers and the HR manager believes another potential problem could be drivers believing they will earn a higher salary in the platform than they would really.***
+
+This last part resonated with John Knowsall. In his own experience, when people had high expectations and then didn't met them that lead to huge internal disappointment.
+
+To further explore this, a dataset has been collected on drivers expected and actual salary, as well as some demographic variables; the dataset is shared below.
+
+## 2. Exploration
+
+First, begin your exploration by running a str() function to get a sense of the data.
+
+```{r}
+
+df<-read.csv("driverschurn.csv")
+str(df)
+summary(df)
+
+
+```
+
+Next, to prepare his dataset, split it between training and testing dataset:
+
+```{r}
+set.seed(1013, sample.kind = "Rejection")
+
+#split the dataset leaving 80% of observations in the training dataset and 20% in the test dataset:
+spl = sample(nrow(df),0.8*nrow(df))
+head(spl)
+
+
+# Now lets split our dataset into train and test:
+
+train.df = df[spl,]
+test.df = df[-spl,]
+
+```
+
+## 3. Modeling
+
+After that, John Knowsall decided to run a linear regression to test if expected and actual salary played a role. He decided a clever way to do so would be to start with actual salary, which surely would play a role. Then, he added expected salary. Finally, he added the demographic control variables.
+
+```{r}
+m1<-lm(CHURN~ACTSAL,data=train.df)
+summary(m1)
+
+
+m2<-lm(CHURN~ACTSAL+EXPSAL,data=train.df)
+summary(m2)
+
+m3<-lm(CHURN~.,data=train.df)
+summary(m3)
+
+```
+
+## 4. Presenting
+
+Although John liked his model's results, he knew that this is not the proper way to present them. So, he made a nice looking table:
+
+```{r}
+library(jtools)
+library(sjPlot)
+
+	
+# Generate the table using tab_model()
+#transform
+model_table <- tab_model(m1, m2, m3,dv.labels = c("(1):", "(2)","(3)"),show.ci=FALSE,collapse.se=TRUE, p.threshold = c(0.1, 0.05, 0.01,0.001),p.style = "stars",
+  string.se = "std. Error",
+  string.p = "p-value",transform=NULL,digits=6)
+
+
+# Print the table
+print(model_table)
+
+```
+
+Although the values for ACTSAL and EXPSAL coefficients were very low, they were strongly statistically significant! So John knew he was onto something!
+
+Sandy was not sold on any of it. She said, 'A linear regression John, really? Did you forget all that we were taught in that Data Mining course? We can do better than this!' Ouch!
+
+Disheartened, John thought for hours about why a linear regression analysis would be wrong. Perhaps it was not wrong and Sandy was just expecting him to use a more fancy machine learning technique, or maybe he just didn't understand statistics....he decided to go back with a different model. This time, he would use a tree.
+
+## 5. 2nd modeling attempt
+
+```{r}
+library(rpart)
+library(rpart.plot)
+tree<-rpart(CHURN ~ ., data=train.df, method="anova")
+rpart.plot(tree,digits=-2)
+```
+
+Although he wasn't entirely sure how to interpret the tree, John thought that with EXPSAL coming as the variable for the first split, it was likely that EXPSAL was indeed relevant as he has originally supposed.
+
+John Knowsall, despite his name, was not sure how best to present his analysis in a way that would convince Sandy of the soundness of his insights and, more importantly, address inflated salary expectations from the drivers and win this round of the case competition.
+
+# Just then, John had a brilliant idea!
+
+### He is asking for you to help!!
+
+Please complete the questions in our CANVAS EXAM and be prepared to make edits and additions to this QMD file to develop your answers. Your final QMD file and DOCX file will need to be uploaded into CANVAS as part of the exam.
