@@ -1,6 +1,1 @@
-*DrugAMPReportingQuarterly022025*.csv filter=lfs diff=lfs merge=lfs -text
-*IHME-GBD_2021_DATA*.csv filter=lfs diff=lfs merge=lfs -text
-*project/data_*/*.csv filter=lfs diff=lfs merge=lfs -text
-*project/data_*/*.zip filter=lfs diff=lfs merge=lfs -text
-<<<<<<< HEAD
-*project/data_*/*.rdata filter=lfs diff=lfs merge=lfs -text
+*.csv filter=lfs diff=lfs merge=lfs -text
