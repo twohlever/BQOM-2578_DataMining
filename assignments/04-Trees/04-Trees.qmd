@@ -18,27 +18,43 @@ format:
     pdf-engine: xelatex
 ---
  
+
 # Executive Summary
+## Predicting Pennsylvania County Suicide Rates from Hospital Data: A Comparative Analysis
+This analysis investigates how effectively county suicide rates in Pennsylvania can be predicted using hospital-level data through three distinct modeling approaches: logistic regression, regression trees, and classification trees. The *dependent variable* is county suicide rate, with county hospital characteristics serving as predictors after extensive data preparation including feature reduction, categorical variable encoding, and dataset joining.
 
-How well can we predict county Suicide Rates from the hospital information on a per county basis within Pennsylvania? Combine both county Suicide rate data with all PA hospital data to address this question. Dependent Variable is the County Suicide rate.
-The Data preparation includes removing a large number of features expected to be unrelated to suicide rates, changing the representation of categorical variables to integers, and joining hospital data and county level suicide data.
+### `discharges1864` (hospital patient discharges ages 18-64) emerges as the dominant predictor across all three modeling approaches, though each method reveals distinct patterns in variable importance and predictive performance.
+
+## Model Performance
+### Logistic Regression Insights
+The presence of a children’s hospital shows the strongest effect (β = 2.865, p < 0.001), translating to 17.6 times higher odds of elevated suicide rates. Patient discharge volume demonstrates a small but statistically significant effect (β = 0.0001, p = 0.022). Notably, `type_of_organization` shows marginal significance (β = -0.302, p = 0.070), while variables including `psychiatrists`, `clinic_psychiatric`, and `comprehensive_rehab` demonstrate no significant impact.
+
+### Regression Tree Performance
+The model relies heavily on `discharges1864` as the primary split variable (initial threshold: 2,228), with subsequent splits at 153, 254, 338, 349, and 523. Secondary variables include `clinic_psychiatric` (threshold: 1.5-2), `psychiatrists` (thresholds: 7.5, 15.5, 35.5), and `comprehensive_rehab` (threshold: 2). The model achieves an out-of-sample R² of 0.039 with MAE of 48.32, indicating modest predictive capability.
+
+### Classification Tree Results 
+The classification approach shows the most parsimonious structure, using only `discharges1864` (primary split at 8,431) and `psychiatrists` (splits at 15 and 21) in the features-of-interest model. The simpler all-features tree (Tree 1) achieves 72.73% accuracy using only `discharges1864`, while the expanded trees incorporating psychiatrist staffing levels (Trees 2 & 3) reach 77.27% accuracy. However, this still underperforms logistic regression, which achieves 84.09% accuracy.
+
+## Clinical Implications 
+The finding that specialized psychiatric resources (`psychiatrists`, `clinic_psychiatric`, `psych_over17`) show minimal direct predictive value is counterintuitive. The strong signal from general hospital discharge volume suggests that overall healthcare access and utilization may be more informative proxies for community suicide risk than specialized mental health resources alone. The marginal significance of `type_of_organization` hints that organizational structure may influence outcomes in ways not fully captured by facility-level service indicators.
 
 
+## Model Features Impact Comparison 
 
-Logistic regression provides insight into the impact of included features. Selected features were those shown to demonstrate significant impact on the linear regression. Using these features in a Logistic Regression we can better percieve their impact on County Suicide Rates.
-
-| Feature | Logistic Regression | Regression Tree | Classification Tree|
+| Feature | *Logistic Regression* | Regression Tree | Classification Tree|
 |:---:|:---:|:---:|:---:| 
 |`children_hospital`| Very large effect (β = 2.849) | Not Used | Not Used|
 |`psych_over17`| Small effect, but not significant (β = 0.184)   | Not Used | Not Used |
-| `discharges1864`| Very small but significant effect (β = 0.0001) | Primary split variable  First split at 2,228  Subsequent splits: 153, 254, 349, 523, 8431, etc.  Most important predictor  OSR² = 0.088, MAE = 48.32 | Primary and only split variable  Main split at 8,431 discharges  Tree 1 accuracy: 72.73%  Trees 2 & 3 accuracy: 77.27% |
+| `discharges1864`| Very small but significant effect (β = 0.0001) | Primary split variable  First split at 2,228  Subsequent splits: 153, 254, 349, 523, 8431, etc.  Most important predictor  OSR² = 0.088, MAE = 48.32 | Primary and only split variable -  Main split at 8,431 discharges -  Tree 1 accuracy: 72.73% -  Trees 2 & 3 accuracy: 65.91% |
 | `psych_over17_beds_lic` | Negligible effect (β = 0.001) | Not Used | Not Used |
-| `psychiatrists` | x | x | x |
-| `clinic_psychiatric`  | x | x | x |
-| `comprehensive_rehab` | x | x | x |
-|`type_of_organization`| x | x | x |
+| `psychiatrists` | Negligible effect (β = 0.000794, p = 0.880) -  Not statistically significant | Secondary split variable -  Used at multiple thresholds: 7.5, 15.5, 35.5 -  Appears in deeper tree nodes | Secondary split variable -  Used at thresholds: 15, 21 -  Splits high-discharge facilities |
+| `clinic_psychiatric`  | Small positive effect (β = 0.120, p = 0.554) -  Not statistically significant |Secondary split variable -  Split threshold at 1.5 and 2 -  Distinguishes facilities with/without psychiatric clinics | Not Used |
+| `comprehensive_rehab` | Negative effect (β = -0.318, p = 0.104) -  Marginally non-significant  | Terminal split variable -  Threshold at 2 -  Used only in deepest nodes | Not Used |
+|`type_of_organization`| Negative effect (β = -0.302, p = 0.070) -  Marginally significant -  Certain organization types associated with lower suicide rates | Not Used| Not Used|
 
-These findings are discussed in detail in [Logistic Regression Model 2 (Multi-Variable) : Beta Coefficients Discussion](#logistic-model-discussion).
+### Tree accuracy figures reflect the features-of-interest (FOI) model. The simpler all-features classification tree using only `discharges1864` achieved higher accuracy (72.73%). Logistic regression outperformed both tree approaches with 84.09% accuracy.
+
+
 
 
 # Data Preparation
