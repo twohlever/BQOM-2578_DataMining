@@ -26,11 +26,17 @@ The Data preparation includes removing a large number of features expected to be
 
 
 Logistic regression provides insight into the impact of included features. Selected features were those shown to demonstrate significant impact on the linear regression. Using these features in a Logistic Regression we can better percieve their impact on County Suicide Rates.
+
 | Feature | Logistic Regression | Regression Tree | Classification Tree|
-|`children_hospital`| Very large effect (β = 2.849) | Regression Tree | Classification Tree |
-|`psych_over17`| Small effect, but not significant (β = 0.184)   | Regression Tree | Classification Tree |
-| `discharges1864`| Very small but significant effect (β = 0.0001) | Regression Tree | Classification Tree |
-| `psych_over17_beds_lic` | Negligible effect (β = 0.001) | Regression Tree | Classification Tree |
+|:---:|:---:|:---:|:---:| 
+|`children_hospital`| Very large effect (β = 2.849) | Not Used | Not Used|
+|`psych_over17`| Small effect, but not significant (β = 0.184)   | Not Used | Not Used |
+| `discharges1864`| Very small but significant effect (β = 0.0001) | Primary split variable  First split at 2,228  Subsequent splits: 153, 254, 349, 523, 8431, etc.  Most important predictor  OSR² = 0.088, MAE = 48.32 | Primary and only split variable  Main split at 8,431 discharges  Tree 1 accuracy: 72.73%  Trees 2 & 3 accuracy: 77.27% |
+| `psych_over17_beds_lic` | Negligible effect (β = 0.001) | Not Used | Not Used |
+| `psychiatrists` | x | x | x |
+| `clinic_psychiatric`  | x | x | x |
+| `comprehensive_rehab` | x | x | x |
+|`type_of_organization`| x | x | x |
 
 These findings are discussed in detail in [Logistic Regression Model 2 (Multi-Variable) : Beta Coefficients Discussion](#logistic-model-discussion).
 
@@ -51,7 +57,7 @@ rm(list = ls())
 # library(ROCR)
 library(caret)
 library(tidyverse)
-library("tidyr") #pivot_longer funciton
+library("tidyr") #pivot_longer
 library(corrplot)
 library(tidyverse)
 # library("lm.beta")
@@ -138,6 +144,17 @@ selected_cols <- c("facility_id",
                "psychiatrists"# ,
                # "ft_staff"
                )
+FOI <- c( "children_hospital",  #Features of interest
+  "psych_over17",
+  "discharges1864",
+   "psych_over17_beds_lic",
+   "psychiatrists",
+   "clinic_psychiatric",
+   "comprehensive_rehab",
+  "type_of_organization"
+  )
+model_feature_input <- as.formula(paste("target ~", paste(FOI, collapse = " + ")))
+
 # Keep only columns related to model 
 ## Only select columns that actually exist in the raw data
 selected_cols <- selected_cols[!selected_cols %in% setdiff(selected_cols, names(raw_df)) ]
@@ -215,8 +232,8 @@ Integer variables are categorical.
 
 ```{r}
 #| label: ReviewData
-#| echo: true
-#| message: true
+#| echo: false
+#| message: false
 #| warning: false
 #| fig-width: 10
 #| fig-height: 10
@@ -225,11 +242,7 @@ Integer variables are categorical.
 ## Variable TYPES
 ##
 
-# sapply(df, typeof)
 sapply(df, class)
-
-
-
 
 ##
 ## Visualize target values 
@@ -265,39 +278,13 @@ target_bin_cutoff <- local_min_x
 Set the cut-off value for 1 or 0 (binary) for Logistic regression is the local minimum of county Suicide Rates.
 
 
-```{r}
-#| label: VisualizeAllVariables
-#| echo: true
-#| message: true
-#| warning: false
-#| fig-width: 10
-#| fig-height: 10
-
-##
-## Visualize ALL data across target values
-## Normalized Scatter
-##
-minMax <- function(x) { (x - min(x)) / (max(x) - min(x))}
-df_norm <- as.data.frame(lapply(df, minMax))
-df_long <- pivot_longer(df_norm, cols = -target, names_to = "variable", values_to = "value")
-ggplot(df_long, aes(x = target, y = value, color = variable)) +
-  geom_point(size = 2) +
-  theme_minimal() +
-  theme(legend.position = "bottom") +
-  guides(color = guide_legend(nrow = 7, title = "Feature")) +
-  labs(x = "", y = "", color = "Feature")
-
-```
-
-No clear clustering patterns across all variables vs. County Suicide Rates (Regression Target).
-
 
 ## Split Dataset into Training and Test
 
 We will leave 80% of observations in the training set and 20% in the test set.
 
 ```{r}
-#| label: SplitTranTest
+#| label: SplitTrainTest
 #| echo: true
 #| message: true
 #| warning: false
@@ -371,8 +358,6 @@ corrplot(cor_mat_plot,
 #| echo: true
 #| message: true
 
-# For more info: https://www.rdocumentation.org/packpsych_over17s/stats/versions/3.6.2/topics/step 
-
 model <- lm(target ~ ., data = df)
 summary(model)
 
@@ -403,18 +388,11 @@ train.df = df[spl,]
 test.df = df[-spl,]
 
 
-# Logistic Regression with ONLY discharges1864
-logreg_ch <- glm(target ~ discharges1864, data=df, family="binomial")
-summary(logreg_ch)
-
-# Logistic Regression with discharges1864 + 
-#  children_hospital + psych_over17  + psych_over17_beds_lic
-logreg_chdisch <- glm(target ~ discharges1864  +  children_hospital + psych_over17
-             + psych_over17_beds_lic, data=df, family="binomial")
-summary(logreg_chdisch)
+# Logistic Regression with FOI
+logreg <- glm(model_feature_input, data=df, family="binomial")
+summary(logreg)
 
 
-logreg <- logreg_chdisch
 coeftable <- data.frame(col1=coef(logreg),col2=exp(coef(logreg)))
 colnames(coeftable)<-c('Coefficient (log-odds)','e^coefficient (odds)')
 coeftable
@@ -427,17 +405,6 @@ df$PredProbs <- predict(logreg, newdata=df, type="response")
 # type="response" gives the probability
 summary(df$PredProbs)
 
-
-
-# transform prediction into either 1 (Elevated Suicide Rate) or 0 (Suicide Rate) using a cutoff point
-for (cutoff in c(0.25, 0.15, 0.1, 0.05))
-{
-  df$PredHighSuicide <- ifelse(df$PredProbs >= cutoff,1,0)
-  summary(df$PredHighSuicide)
-  cat(paste("For a cutoff point of", 
-    cutoff, "the proportion of Counties predicted to have high suicide rates is", 
-    round(mean(df$PredHighSuicide),2)), "\n\n")
-}
 
 ```
 
@@ -457,66 +424,12 @@ df <- df_clean
 train.df = df[spl,]
 test.df = df[-spl,]
 
-rpart(target~ children_hospital, data=train.df)
 
+rpart(model_feature_input, data=train.df)
 (train.df%>%filter(children_hospital==1))$target%>%mean()
 (train.df%>%filter(children_hospital==0))$target%>%mean()
 
-```
-
-Regression Tree with children_hospital and discharges1864
-
-```{r}
-#| label: TreeRegression2
-#| echo: true
-#| message: true
-#| warning: false
-#| fig-width: 10
-#| fig-height: 10
-
-tree1<-rpart(target~ children_hospital, data=train.df)
-rpart.plot(tree1,digits=-2,extra=1) 
-
-tree2<-rpart(target~ discharges1864, data=train.df)
-rpart.plot(tree2,digits=-2,extra=101) 
-
-tree3<-rpart(target~ children_hospital+discharges1864, data=train.df)
-rpart.plot(tree3,digits=-2,extra=101)
-
-```
-
-
-Regression Tree with all the variables
-```{r}
-#| label: TreeRegression3
-#| echo: true
-#| message: true
-#| warning: false
-#| fig-width: 10
-#| fig-height: 10
-
-tree4<-rpart(target~ ., data=train.df)
-rpart.plot(tree4,digits=-2,extra=101)  
-
-df$logtarget<-log(df$target)
-summary(df$logtarget)
-train.df = df[spl,]
-test.df = df[-spl,]
-
-prp(tree1,digits=-3)
-prp(tree3,digits=-3)
-
-names(df)
-
-basetree<-rpart(target ~ .-logtarget,data=train.df)
-prp(basetree,digits=-5)
-
-#try different cp values to get a bigger tree
-prp(rpart(target ~ .-logtarget,data=df, method="anova",minbucket=5,cp=0.0001),digits=-5)
-prp(rpart(target ~ .-logtarget,data=df, method="anova",minbucket=50,cp=0.001),digits=-5)
-prp(rpart(target ~ .-logtarget,data=df, method="anova",minbucket=50,cp=0.01),digits=-5)
-prp(rpart(target ~ .-logtarget,data=df, method="anova",minbucket=50,cp=0.01),digits=-5,extra=101)  
-# extra = 101 displays observations in each leaf and percentpsych_over17
+prp(rpart(target ~ .,data=df, method="anova",minbucket=5,cp=0.0001),digits=-5)
 ```
 
 ## Cross Validation
@@ -528,88 +441,36 @@ prp(rpart(target ~ .-logtarget,data=df, method="anova",minbucket=50,cp=0.01),dig
 #| fig-width: 10
 #| fig-height: 10
 
-
 set.seed(1760, sample.kind = "Rejection")
 
-#make a tree with a very small value of cp. Not 0 because it will take a long time creating too many splits
-tree_cv = rpart(target ~ .-logtarget,data=train.df, method="anova")
-rpart.plot(tree_cv,digits=-2,extra=101)
+tree_cv_all <- rpart(target ~ ., data=train.df, method="anova")
+rpart.plot(tree_cv_all, digits=-2, extra=101)
+plotcp(tree_cv_all)
 
-tree_cv = rpart(target ~ .-logtarget,data=train.df, method="anova",minbucket=5000,cp=0.1)
-rpart.plot(tree_cv,digits=-2,extra=101)
-
-tree_cv = rpart(target ~ .-logtarget,data=train.df, method="anova",minbucket=5000,cp=0.01)
-rpart.plot(tree_cv,digits=-2,extra=101)
-
-tree_cv = rpart(target ~ .-logtarget,data=train.df, method="anova",minbucket=5000,cp=0.001)
-rpart.plot(tree_cv,digits=-2,extra=101)
-
-tree_cv = rpart(target ~ .-logtarget,data=train.df, method="anova",minbucket=50,cp=0.001)
-plotcp(tree_cv)
-# plotcp will give us the relative error in the y axis for a 10-fold cross validation of our dataset, telling us the size of the tree (leaves) and the corresponding cp.
-
-# The dotted line in the "plotcp" graph represents the minimum cross-validation error plus one standard deviation. One simple rule of thumb is to consider the maximum cp value (i.e., the first one from left to right) for which the x-val relative error falls under that line. This represents the simplest model (smallest tree) that gives us a cross-validation error that is statistically similar to the "best" tree.
-
-tree01 = rpart(target ~ .-logtarget,data=train.df, method="anova",minbucket=50,cp=0.01)
-rpart.plot(tree01,digits=-2,extra=101)
-
-treea = rpart(target ~ .-logtarget,data=train.df, method="anova",minbucket=50,cp=0.003)
-rpart.plot(treea,digits=-2,extra=101)
-
-treeb = rpart(target ~ .-logtarget,data=train.df, method="anova",minbucket=50,cp=0.00125)
-rpart.plot(treeb,digits=-2,extra=101)
+tree_cv_foi <- rpart(model_feature_input,data=train.df, method="anova")
+rpart.plot(tree_cv_foi, digits=-2, extra=101)
+plotcp(tree_cv_foi)
 
 
-```
-
-
-Which model is better? To get out of sample R square:
-
-```{r}
-#| label: TreeRegression-CompareModels
-#| echo: true
-#| message: true
-#| warning: false
-#| fig-width: 10
-#| fig-height: 10
-
-## Predictions for both models:
-test.df$pred01 = predict(tree01, newdata= test.df)
-test.df$preda = predict(treea, newdata= test.df)
-test.df$predb = predict(treeb, newdata= test.df)
-head(test.df)%>%relocate(preda,predb, pred01)
-
-
-mean_train = mean(train.df$target)  #grab the mean for calc below
-
-# Compute the sum of squared errors (SSE) using our tree:
-
-SSE01 = sum((test.df$target - test.df$pred01)^2)
-SSEa = sum((test.df$target - test.df$preda)^2)
-SSEb = sum((test.df$target - test.df$predb)^2)
-
-SSE01
-SSEa
-SSEb
-
-print(paste("Tree CP=0.01 has a SSE of", SSE01))
-print(paste("Tree A has a SSE of", SSEa))
-print(paste("Tree B has a SSE of", SSEb))
-
-# And the total sum of squared errors (SST) using our simple benchmark model
-# (the mean in the training set)
-
+mean_train = mean(train.df$target)
 SST = sum((test.df$target - mean_train)^2)
 
-# With that, we finally get
+## Predictions
+test.df$pred_cv_all = predict(tree_cv_all, newdata=test.df)
+test.df$pred_cv_foi = predict(tree_cv_foi, newdata=test.df) 
+ 
+# Compute the sum of squared errors (SSE) using our tree:
+SSE_all = sum((test.df$target - test.df$pred_cv_all)^2)
+print(paste("Tree All has a SSE of", SSE_all))
+OSR2_all = 1 - SSE_all/SST
+OSR2_all
 
-OSR2.01 = 1 - SSE01/SST
-OSR2a = 1 - SSEa/SST
-OSR2b = 1 - SSEb/SST
 
-OSR2.01
-OSR2a
-OSR2b
+# Compute the sum of squared errors (SSE) using our tree:
+SSE_foi = sum((test.df$target - test.df$pred_cv_foi)^2)
+print(paste("Tree FOI has a SSE of", SSE_foi))
+OSR2_foi = 1 - SSE_foi/SST
+OSR2_foi
 
 ```
 
@@ -623,14 +484,9 @@ Let's see the MAE for comparisons:
 #| fig-width: 10
 #| fig-height: 10
 
-MAE.01 = mean(abs(test.df$target - test.df$pred01))
-MAEa = mean(abs(test.df$target - test.df$preda))
-MAEb = mean(abs(test.df$target - test.df$predb))
+MAE = mean(abs(test.df$target - test.df$pred01))
 
-
-MAE.01
-MAEa
-MAEb
+MAE
 
 ```
 
@@ -641,7 +497,7 @@ MAEb
 # Trees: Classification
 
 ```{r}
-#| label: TreeClassification1
+#| label: TreeClassification
 #| echo: true
 #| message: true
 #| warning: false
@@ -655,11 +511,6 @@ train.df = df[spl,]
 test.df = df[-spl,] 
 
 
-
-# df<-df%>%relocate(target)
-
-summary(df)
-
 #It is always a good practice to see the proportion of observations we have for each case
 table(df$target)
 prop.table(table(df$target))  # prop is "proportion"
@@ -670,29 +521,14 @@ prop.table(table(train.df$target))
 cat("\n For the test dataset: ")
 prop.table(table(test.df$target))
 
-```
 
-## First Classification Trees
+tree_all <-rpart(target ~ ., data=train.df, method="class",cp=0.05)
+rpart.plot(tree_all, digits=-2)
+prp(tree_all)
 
-```{r}
-#| label: TreeClassification2
-#| echo: true
-#| message: true
-#| warning: false
-#| fig-width: 10
-#| fig-height: 10
-
-
-tree<-rpart(target ~ ., data=train.df, method="class",cp=0.05)
-# simple graph:
-# outcome is just the most common value (the mode)
-prp(tree)
-
-# outcome by default is the most common value, the proportion of successes (variable==1) and the % of observations  
-rpart.plot(tree,digits=-2)
-
-tree<-rpart(target ~ .-target, data=train.df, method="class", cp=0.05)
-rpart.plot(tree,digits=-2)
+tree_foi<-rpart(model_feature_input, data=train.df, method="class", cp=0.05)
+rpart.plot(tree_foi,digits=-2)
+prp(tree_foi)
 
 ```
 
@@ -707,82 +543,19 @@ rpart.plot(tree,digits=-2)
 #| fig-height: 10
 
 
-#pick a large enough minbucket you would trust the results and
-#a cp value small enough we will get large trees for the cpplot
-
-# how can we get some reference info to help us decide?
-
-tree_cv = rpart(target ~ .-target,data=train.df, method="class",cp= 0.003 )
-rpart.plot(tree_cv,digits=-2)
-
-plotcp(tree_cv)
-```
-
-Let's see the larger trees. When do they stop making sense?
-
-```{r}
-#| label: TreeClassificationLarge
-#| echo: true
-#| message: true
-#| warning: false
-#| fig-width: 10
-#| fig-height: 10
+cat("All Features Tree:")
+test.df$pred_all = predict(tree_all, newdata = test.df, type="class")
+confusionMatrix(test.df$pred_all,as.factor(test.df$target), positive="1")
+acc_tree_all <- sum(test.df$pred_all == test.df$target) / nrow(test.df)
+print(paste("Accuracy for All Features Tree", round(acc_tree_all * 100, 2), "%"))
 
 
-tree2 = rpart(target ~ .-target,data=train.df, method="class",minbucket=30,cp=.003)
-rpart.plot(tree2,digits=-2)
+cat("FOI Tree:")
+test.df$pred_foi = predict(tree_foi, newdata = test.df, type="class")
+confusionMatrix(test.df$pred_foi,as.factor(test.df$target), positive="1")
+acc_tree_foi <- sum(test.df$pred_foi == test.df$target) / nrow(test.df)
+print(paste("Accuracy for FOI Tree:", round(acc_tree_foi * 100, 2), "%"))
 
-
-tree3 = rpart(target ~ .-target,data=train.df, method="class",minbucket=30,cp=.0015)
-rpart.plot(tree3,digits=-2)
-```
-
-## Making predictions and comparing different trees
-
-```{r}
-#| label: TreeClassificationPrediction
-#| echo: true
-#| message: true
-#| warning: false
-#| fig-width: 10
-#| fig-height: 10
-
-
-test.df$pred = predict(tree, newdata = test.df, type="class")
-test.df$pred2 = predict(tree2, newdata = test.df, type="class")
-test.df$pred3 = predict(tree3, newdata = test.df, type="class")
-test.df<-test.df%>%relocate(target,pred,pred2,pred3)
-head(test.df)
-tail(test.df)
-
-```
-
-```{r}
-#| label: TreeClassificationConfusionMatrix
-#| echo: true
-#| message: true
-#| warning: false
-#| fig-width: 10
-#| fig-height: 10
-
-cat("1st tree (using target):")
-confusionMatrix(test.df$pred,as.factor(test.df$target), positive="1")
-# Remember that this version of confusion matrix has "actual" in columns and
-#    has the predicted in the rows.  Also we need to specify positive as 1
-#    for the performance metrics (e.g., Sensitivity) to be what we expect
-
-cat("2nd tree (using nine splits):")
-confusionMatrix(test.df$pred2,as.factor(test.df$target), positive="1")
-
-cat("3rd tree (using eleven splits):")
-confusionMatrix(test.df$pred3,as.factor(test.df$target), positive="1")
-
-acc_tree <- sum(test.df$pred == test.df$target) / nrow(test.df)
-acc_tree2 <- sum(test.df$pred2 == test.df$target) / nrow(test.df)
-acc_tree3 <- sum(test.df$pred3 == test.df$target) / nrow(test.df)
-print(paste("Accuracy for tree:", round(acc_tree * 100, 2), "%"))
-print(paste("Accuracy for tree2:", round(acc_tree2 * 100, 2), "%"))
-print(paste("Accuracy for tree3:", round(acc_tree3 * 100, 2), "%"))
 ```
 
 
@@ -797,72 +570,21 @@ print(paste("Accuracy for tree3:", round(acc_tree3 * 100, 2), "%"))
 #| fig-width: 10
 #| fig-height: 10
 
+## Logistic Regression
+test.df$predregprobs_foi = predict(logreg, newdata = test.df, type="response")
+test.df$predreg1<-ifelse(test.df$predregprobs_foi>0.5,1,0)
+acc_reg <- sum(test.df$predregprobs_foi == test.df$target) / nrow(test.df)
+print(paste("Accuracy for Logistic Regression 1:", round(acc_reg * 100, 2), "%"))
+ConfMatReg <- confusionMatrix(data=as.factor(test.df$predreg1),reference=as.factor(test.df$target), positive = "1")
+ConfMatReg 
 
-reg1<-glm(target~discharges1864+psych_over17_beds_lic+children_hospital+psych_over17,data=train.df,family='binomial')
-summary(reg1)
-
-reg2<-glm(target~discharges1864+psych_over17_beds_lic+children_hospital+psych_over17+psych_over17_beds_lic+alcohol_drug_treat ,data=train.df,family='binomial')
-summary(reg2)
-```
-
-Outcome is very different. We have to find a common metric. Common approaches are accuracy (in this case) or sensitivity or specificity, if they better fit your modeling needs.
-
-```{r}
-#| label: TreeClassificationVSLogisticRegression2
-#| echo: true
-#| message: true
-#| warning: false
-#| fig-width: 10
-#| fig-height: 10
-
-test.df$predregprobs1 = predict(reg1, newdata = test.df, type="response")
-test.df$predregprobs2 = predict(reg2, newdata = test.df, type="response")
-
-test.df$predreg1<-ifelse(test.df$predregprobs1>0.5,1,0)
-test.df$predreg2<-ifelse(test.df$predregprobs2>0.5,1,0)
-
-acc_reg <- sum(test.df$predreg1 == test.df$target) / nrow(test.df)
-acc_reg2 <- sum(test.df$predreg2 == test.df$target) / nrow(test.df)
-print(paste("Accuracy for regression 1:", round(acc_reg * 100, 2), "%"))
-print(paste("Accuracy for regression 2:", round(acc_reg2 * 100, 2), "%"))
-
-
-confusionMatrix(data=as.factor(test.df$predreg1),reference=as.factor(test.df$target), positive = "1")
-
-confusionMatrix(data=as.factor(test.df$predreg2),reference=as.factor(test.df$target), positive = "1")
-
-
-
-```
-
-## Loss Matrix
-
--   To give a greater penalty to false negatives (predicting as negative when it is positive) we increase the second value.
--   If you wanted to give a greater penalty to false positives you would have to increase the third value.
-
-```{r}
-#| label: TreeClassificationLossMatrix
-#| echo: true
-#| message: true
-#| warning: false
-#| fig-width: 10
-#| fig-height: 10
-
-lossmatrix = matrix(c(0,5,1,0), byrow=FALSE, nrow=2)
-lossmatrix
-
-tree2new = rpart(target ~ .-target,data=train.df, method="class",minbucket=100,cp=0.0077)
-rpart.plot(tree2new,digits=-2)
-
-losstree2 = rpart(target ~ .-target,data=train.df, method="class",parms=list(loss=lossmatrix),minbucket=100,cp=0.0077)
-rpart.plot(losstree2,digits=-2)
-
-cat("Previous one:")
-confusionMatrix(test.df$pred2,as.factor(test.df$target), positive="1")
-
-cat("New one:")
-test.df$losspred2 = predict(losstree2, newdata = test.df, type="class")
-confusionMatrix(test.df$losspred2,as.factor(test.df$target), positive="1")  
+# Classification Tree
+test.df$predregtreeprobs_foi = predict(tree_foi, newdata = test.df, type="class")
+test.df$predreg2 <- ifelse(test.df$predregtreeprobs_foi >0.5 ,1 ,0)
+acc_reg_tree <- sum(test.df$predregtreeprobs_foi == test.df$target) / nrow(test.df)
+print(paste("Accuracy for Classification Tree:", round(acc_reg_tree * 100, 2), "%"))
+ConfMatTreeReg <-confusionMatrix(data=as.factor(test.df$predregtreeprobs_foi),reference=as.factor(test.df$target), positive = "1")
+ConfMatTreeReg
 
 ```
 
